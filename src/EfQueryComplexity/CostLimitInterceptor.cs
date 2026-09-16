@@ -48,7 +48,7 @@ sealed class CostLimitInterceptor :
         var type = connection.GetType().FullName;
         if (type != "Microsoft.Data.SqlClient.SqlConnection")
         {
-            throw new($"sqlServerCostLimit is SQL Server only, but the connection is {type}.");
+            throw new InvalidOperationException($"sqlServerCostLimit is SQL Server only, but the connection is {type}.");
         }
 
         return limit;

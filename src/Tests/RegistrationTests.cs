@@ -60,6 +60,17 @@ public class RegistrationTests
         Assert.Throws<ArgumentOutOfRangeException>(
             () => new DbContextOptionsBuilder<TestDbContext>().UseQueryComplexity(sqlServerCostLimit: -1));
 
+    // SQL Server reads zero as the query governor being off, so accepting it would turn the check
+    // off for anyone who meant to refuse everything
+    [Test]
+    public async Task ZeroCostLimitThrows()
+    {
+        var exception = Assert.Throws<ArgumentOutOfRangeException>(
+            () => new DbContextOptionsBuilder<TestDbContext>().UseQueryComplexity(sqlServerCostLimit: 0));
+
+        await Assert.That(exception.Message).Contains("greater than zero");
+    }
+
     static ICompiledQueryCache Cache(TestDbContext context) =>
         context.GetService<ICompiledQueryCache>();
 

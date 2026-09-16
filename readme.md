@@ -201,6 +201,7 @@ protected override void OnConfiguring(DbContextOptionsBuilder builder) =>
 `SET QUERY_GOVERNOR_COST_LIMIT` is applied to every connection as it opens, and SQL Server then refuses any statement whose estimated plan cost is greater than the limit, with error 8649.
 
 - The cost is the optimizer's estimate in its own units, not a time, so treat it as relative. It is an estimate, so stale statistics can still let a slow query through.
+- It has to be greater than zero. SQL Server reads a cost limit of zero as the query governor being off, so passing zero throws rather than silently allowing everything.
 - It is applied on every open, because reusing a pooled connection resets session state.
 - It is a property of the connection, so `IgnoreQueryComplexity()` does not lift it for one query.
 - SQL Server only, including Azure SQL. Other providers throw.

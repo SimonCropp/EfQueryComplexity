@@ -24,7 +24,8 @@ public static class QueryComplexityExtensions
     /// </param>
     /// <param name="sqlServerCostLimit">
     /// When set, SQL Server refuses any statement whose estimated plan cost is greater than this
-    /// value, with error 8649. SQL Server only.
+    /// value, with error 8649. Must be greater than zero, since SQL Server treats zero as the query
+    /// governor being off. SQL Server only.
     /// </param>
     public static DbContextOptionsBuilder UseQueryComplexity(
         this DbContextOptionsBuilder builder,
@@ -32,9 +33,14 @@ public static class QueryComplexityExtensions
         QueryComplexityLimits? throwAt = null,
         int? sqlServerCostLimit = null)
     {
-        if (sqlServerCostLimit < 0)
+        // SQL Server reads a limit of zero as the query governor being off, which is the opposite of
+        // what passing zero looks like it asks for
+        if (sqlServerCostLimit < 1)
         {
-            throw new ArgumentOutOfRangeException(nameof(sqlServerCostLimit), sqlServerCostLimit, "Must be zero or greater.");
+            throw new ArgumentOutOfRangeException(
+                nameof(sqlServerCostLimit),
+                sqlServerCostLimit,
+                "Must be greater than zero. SQL Server treats a cost limit of zero as the query governor being off.");
         }
 
         var extension = new QueryComplexityOptionsExtension(
@@ -82,7 +88,8 @@ public static class QueryComplexityExtensions
     /// </param>
     /// <param name="sqlServerCostLimit">
     /// When set, SQL Server refuses any statement whose estimated plan cost is greater than this
-    /// value, with error 8649. SQL Server only.
+    /// value, with error 8649. Must be greater than zero, since SQL Server treats zero as the query
+    /// governor being off. SQL Server only.
     /// </param>
     public static DbContextOptionsBuilder<TContext> UseQueryComplexity<TContext>(
         this DbContextOptionsBuilder<TContext> builder,

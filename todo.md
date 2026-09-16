@@ -1,31 +1,6 @@
 # Todo
 
-Findings from a review on 2026-09-16. 1, 2, 6, 7 and 9 are fixed, and 8 fell out of 7. What is left
-keeps its original number.
-
-## Bugs
-
-### 3. sqlServerCostLimit of 0 turns the governor off
-
-[src/EfQueryComplexity/QueryComplexityExtensions.cs:35](src/EfQueryComplexity/QueryComplexityExtensions.cs#L35)
-
-The guard rejects only a negative value, so 0 is accepted, and `SET QUERY_GOVERNOR_COST_LIMIT 0`
-disables the query governor. A caller passing 0 would expect the opposite. Reject it, or document
-it.
-
-### 4. A bare exception for the wrong provider
-
-[src/EfQueryComplexity/CostLimitInterceptor.cs:51](src/EfQueryComplexity/CostLimitInterceptor.cs#L51)
-
-`throw new(...)` throws `Exception`, so it cannot be caught selectively. Should be
-`InvalidOperationException`.
-
-### 5. The message prints the query the markers are still in
-
-[src/EfQueryComplexity/QueryInterceptor.cs:61](src/EfQueryComplexity/QueryInterceptor.cs#L61)
-
-Counts are measured on the stripped query and the message prints the original, so a node count does
-not add up against the query printed under it, which still shows the marker calls.
+Findings from a review on 2026-09-16. 1 to 9 are fixed. What is left keeps its original number.
 
 ## Performance
 
@@ -35,6 +10,10 @@ not add up against the query printed under it, which still shows the marker call
 
 `MarkerReader.Strip` is called for the ignore flag and the override, and the stripped tree is
 discarded. A read only scan avoids rebuilding the spine of every query that carries a marker.
+
+A value message therefore still prints the query with its markers in it, unlike a shape message. If
+the stripped tree is kept rather than dropped, hand it to the `ValueChecker` and the two paths read
+the same.
 
 ### 11. Every compiled query holds its expression tree
 
@@ -66,6 +45,15 @@ violation. Clearing the field after the first print would at least bound it.
   override that sets `MaxTake` or `MaxInValues` when the configured levels set neither, rather than
   skipping the check silently. Covered by `OverrideTests.ValueOverrideNeedsConfiguredValueLevels`
   and `ShapeOverrideWithoutConfiguredShapeLevels`, and documented in the readme.
+- **3. A sqlServerCostLimit of zero turned the governor off.** `UseQueryComplexity` now requires one
+  greater than zero. Covered by `RegistrationTests.ZeroCostLimitThrows`, and documented in the
+  readme.
+- **4. A bare exception for the wrong provider.** `CostLimitInterceptor` throws
+  `InvalidOperationException`. Not covered, since reaching it needs a second database provider
+  referenced by the test project.
+- **5. The message printed the query the markers were still in.** `QueryInterceptor` prints the
+  stripped query, which is the one it measured. Covered by `OverrideTests.MessageExcludesMarkers`.
+  The value path still prints its markers, which is part of 10.
 - **6. The message was built even when the event was ignored.** `ComplexityLogger.Log` takes a
   `Func<string>` and asks `ShouldLog` and `NeedsEventData` first, so a silenced or filtered event no
   longer prints the query expression.

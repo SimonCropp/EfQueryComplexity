@@ -127,6 +127,25 @@ public class OverrideTests
             .ToQueryString();
     }
 
+    // A query is measured after its markers are removed, so the message prints what was measured
+    // rather than a query with extra nodes in it
+    [Test]
+    public Task MessageExcludesMarkers()
+    {
+        var (context, _) = ContextBuilder.Build(throwAt: Limits.None with {MaxNodes = 1});
+
+        return Throws(
+                () => context.Employees
+                    .Where(_ => _.Salary > 10)
+                    .WithQueryComplexity(
+                        new()
+                        {
+                            MaxNodes = 2
+                        })
+                    .ToQueryString())
+            .IgnoreStackTrace();
+    }
+
     [Test]
     public async Task MarkersAreRemovedFromSql()
     {

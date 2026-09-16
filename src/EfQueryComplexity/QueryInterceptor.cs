@@ -58,7 +58,7 @@ sealed class QueryInterceptor :
             if (violations.Count > 0)
             {
                 throw new QueryComplexityException(
-                    Violations.BuildMessage(violations, ExpressionPrinter.Print(query)),
+                    Violations.BuildMessage(violations, ExpressionPrinter.Print(stripped)),
                     violations);
             }
         }
@@ -68,7 +68,7 @@ sealed class QueryInterceptor :
         {
             ComplexityLogger.Log(
                 context.GetService<IDiagnosticsLogger<DbLoggerCategory.Query>>(),
-                () => Violations.BuildMessage(logViolations, ExpressionPrinter.Print(query)));
+                () => Violations.BuildMessage(logViolations, ExpressionPrinter.Print(stripped)));
         }
 
         return stripped;
