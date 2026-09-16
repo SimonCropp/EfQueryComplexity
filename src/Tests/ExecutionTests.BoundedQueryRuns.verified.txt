@@ -1,0 +1,29 @@
+﻿{
+  target: [
+    {
+      Id: 1,
+      Name: Alice,
+      Salary: 100,
+      DepartmentId: 1
+    },
+    {
+      Id: 2,
+      Name: Bob,
+      Salary: 90,
+      DepartmentId: 1
+    }
+  ],
+  sql: {
+    Text:
+select   top (@p) e.Id,
+                  e.DepartmentId,
+                  e.Name,
+                  e.Salary
+from     Employees as e
+order by e.Name,
+    Parameters: {
+      @p: 2
+    },
+    HasTransaction: false
+  }
+}

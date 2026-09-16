@@ -1,0 +1,8 @@
+﻿[
+  Query complexity limits exceeded:
+ * MaxTake: 5000 exceeds 10
+Change a level for this query with WithQueryComplexity(), skip every check with IgnoreQueryComplexity(), or change the levels passed to UseQueryComplexity().
+Query:
+DbSet<Employee>()
+    .Take(@p)
+]

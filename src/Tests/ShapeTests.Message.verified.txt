@@ -1,0 +1,24 @@
+﻿{
+  Type: QueryComplexityException,
+  Violations: [
+    {
+      Limit: MaxNodes,
+      Max: 1,
+      Actual: 11
+    },
+    {
+      Limit: MaxOperators,
+      Max: 1,
+      Actual: 2
+    }
+  ],
+  Message:
+Query complexity limits exceeded:
+ * MaxNodes: 11 exceeds 1
+ * MaxOperators: 2 exceeds 1
+Change a level for this query with WithQueryComplexity(), skip every check with IgnoreQueryComplexity(), or change the levels passed to UseQueryComplexity().
+Query:
+DbSet<Employee>()
+    .Where(_ => _.Salary > 10)
+    .Take(@p)
+}

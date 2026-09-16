@@ -1,0 +1,8 @@
+﻿[
+  Query complexity limits exceeded:
+ * MaxNodes: 9 exceeds 1
+Change a level for this query with WithQueryComplexity(), skip every check with IgnoreQueryComplexity(), or change the levels passed to UseQueryComplexity().
+Query:
+DbSet<Employee>()
+    .Where(_ => _.Salary > 10)
+]

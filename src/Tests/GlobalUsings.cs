@@ -1,0 +1,9 @@
+global using System.Linq.Expressions;
+global using EfLocalDb;
+global using EfQueryComplexity;
+global using Microsoft.Data.SqlClient;
+global using Microsoft.EntityFrameworkCore;
+global using Microsoft.EntityFrameworkCore.Diagnostics;
+global using Microsoft.EntityFrameworkCore.Infrastructure;
+global using Microsoft.Extensions.Logging;
+global using TUnit.Core.Interfaces;

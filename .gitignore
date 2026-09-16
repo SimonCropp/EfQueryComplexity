@@ -1,0 +1,15 @@
+*.suo
+*.user
+bin/
+obj/
+.vs/
+*.DotSettings.user
+.idea/
+*.received.*
+nugets/
+TestResults/
+nul
+.claude/settings.local.json
+/src/Benchmarks/BenchmarkDotNet.Artifacts
+tmpclaude*
+*.lnk

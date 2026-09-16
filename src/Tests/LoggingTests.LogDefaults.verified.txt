@@ -1,0 +1,11 @@
+﻿{
+  MaxNodes: 1000,
+  MaxDepth: 50,
+  MaxOperators: 30,
+  MaxNavigationDepth: 3,
+  MaxIncludes: 6,
+  MaxIncludeDepth: 3,
+  MaxTake: 1000,
+  MaxInValues: 1000,
+  RejectUnbounded: true
+}
