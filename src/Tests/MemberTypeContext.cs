@@ -1,4 +1,4 @@
-using System.Collections;
+
 
 // Member types the shared model does not have. Kept out of TestDbContext, since it is also the
 // LocalDB schema.
@@ -19,7 +19,7 @@ public class MemberTypeContext(DbContextOptions<MemberTypeContext> options) :
             .Property(_ => _.Flags)
             .HasConversion(
                 _ => ToBytes(_),
-                _ => new BitArray(_));
+                _ => new(_));
     }
 
     static byte[] ToBytes(BitArray bits)

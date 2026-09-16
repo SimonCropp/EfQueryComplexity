@@ -91,6 +91,7 @@ public class ShapeTests
         await Assert.That(
                 Measure(
                     context => context.Companies
+                        // ReSharper disable once RedundantCast
                         .Include(_ => ((Company) (object) _).Departments)
                         .ThenInclude(_ => _.Employees),
                     IncludeDepth))

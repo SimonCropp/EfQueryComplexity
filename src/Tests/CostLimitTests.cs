@@ -101,9 +101,10 @@ public class CostLimitTests
                 .UseQueryComplexity(Limits.None)
                 .Options);
 
-        context.Database.OpenConnection();
-        context.Database.CloseConnection();
-        await context.Database.OpenConnectionAsync();
+        var database = context.Database;
+        await database.OpenConnectionAsync();
+        await database.CloseConnectionAsync();
+        await database.OpenConnectionAsync();
     }
 
     static TestDbContext Build(SqlDatabase<TestDbContext> database) =>
