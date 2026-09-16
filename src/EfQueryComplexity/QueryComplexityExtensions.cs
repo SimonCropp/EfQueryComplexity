@@ -62,8 +62,10 @@ public static class QueryComplexityExtensions
         }
 
         // Take and Contains values only exist while a query executes, so they are checked by a query
-        // compiler rather than by the interceptor
-        if (extension.HasValueLevels)
+        // compiler rather than by the interceptor. The same compiler caches a query that throws, so it
+        // is also registered whenever a query can throw.
+        if (extension.HasValueLevels ||
+            throwAt != null)
         {
             ComplexityQueryCompiler.Register(builder);
         }

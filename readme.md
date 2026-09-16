@@ -117,11 +117,11 @@ A query is bounded when it cannot return more rows than a `Take` allows:
 
 ### Take and IN list sizes
 
-These values only exist while a query runs, so they are checked for every execution rather than once per query. That check needs Entity Framework's internal query compiler, so it is only registered when `MaxTake` or `MaxInValues` is set at either level. Two consequences:
+These values only exist while a query runs, so they are checked for every execution rather than once per query. That check needs Entity Framework's internal query compiler, which is registered when `MaxTake` or `MaxInValues` is set at either level. It is also registered whenever `throwAt` is passed, since it caches a query that throws, so the query is not measured again for every execution. Consequences:
 
 - The package uses an internal API (EF1001), so it is tied to the Entity Framework major version it was built for.
 - It conflicts with any other library that replaces `IQueryCompiler`, since the last one registered wins.
-- A per query override cannot turn these checks on, since whether to register is decided before any query exists. `WithQueryComplexity` that sets `MaxTake` or `MaxInValues`, for a context where neither is set, throws rather than leaving the query unchecked.
+- A per query override cannot turn these checks on, since whether to check values is decided before any query exists. `WithQueryComplexity` that sets `MaxTake` or `MaxInValues`, for a context where neither is set, throws rather than leaving the query unchecked.
 
 A value that is over a log level is logged the first time a compiled query exceeds it, rather than on every execution. A value over a throw level throws every time.
 
@@ -161,7 +161,7 @@ var employees = await context.Employees
 
 Every level left null keeps the configured value, and a level that is set replaces both the log and the throw level for that check. An override never starts throwing for a context that was not given throw levels. To turn one check off for a query use `int.MaxValue`.
 
-`MaxTake` and `MaxInValues` can only be changed for a query when the configured levels set one of them, since the value checks are otherwise not registered at all. An override that sets one anyway throws.
+`MaxTake` and `MaxInValues` can only be changed for a query when the configured levels set one of them, since the value checks are otherwise not set up at all. An override that sets one anyway throws.
 
 Each distinct set of levels is a constant in the query, so a query using them is compiled and checked separately.
 
@@ -213,7 +213,7 @@ protected override void OnConfiguring(DbContextOptionsBuilder builder) =>
 
 ## How it works
 
-- **Shape** is measured by an `IQueryExpressionInterceptor`, which runs only when a query shape is compiled. Each distinct query is measured once, and logged once. A query that throws is never cached, so it throws again every time it is used.
+- **Shape** is measured by an `IQueryExpressionInterceptor`, which runs only when a query shape is compiled. Each distinct query is measured once, and logged once. A query that throws does so every time it is used, but the failure is cached in place of the compiled query, so it is not measured again.
 - **Values** are checked by a wrapper around the delegate Entity Framework caches for a query, so every execution is checked, including executions of compiled queries.
 - **Levels are part of the key for Entity Framework's internal service provider**, so contexts with different levels never share a compiled query. Use a few fixed configurations rather than varying levels per request, or Entity Framework's `ManyServiceProvidersCreatedWarning` fires.
 

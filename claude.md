@@ -40,7 +40,7 @@ Levels come from `UseQueryComplexity(logAt, throwAt, sqlServerCostLimit)` and li
 | `ShapeAnalyzer.cs` | One pass measuring nodes, depth, operators, navigations and includes |
 | `UnboundedDetector.cs` | Whether a query can return an unlimited number of rows |
 | `Markers.cs`, `MarkerReader.cs` | The per query marker calls, and reading (`Read`) and removing (`Strip`) them |
-| `ComplexityQueryCompiler.cs` | Wraps the cached delegate so values are checked for every execution |
+| `ComplexityQueryCompiler.cs` | Wraps the cached delegate so values are checked for every execution, and caches a query that throws |
 | `ValuePlan.cs`, `ValueChecker.cs`, `Counter.cs` | Where Take counts and Contains lists come from, and checking them |
 | `Violations.cs`, `ComplexityLogger.cs` | Comparing against levels, message text, and logging through EF |
 | `CostLimitInterceptor.cs` | `SET QUERY_GOVERNOR_COST_LIMIT` on every connection open |
@@ -48,7 +48,8 @@ Levels come from `UseQueryComplexity(logAt, throwAt, sqlServerCostLimit)` and li
 ### Two places, because of when values exist
 
 - **Shape** is measured in `QueryCompilationStarting`, which runs only when a shape is compiled. Values are not visible there: Entity Framework has already replaced a `Take` count or a `Contains` list with a parameter, and a different value does not recompile.
-- **Values** are checked in `ComplexityQueryCompiler.CompileQueryCore`, which returns the delegate EF caches and runs for every execution. That is internal API (EF1001), suppressed in that one file, and it is only registered when a value level is set. Registration is decided before any query exists, so a per query override cannot turn the value checks on, and `QueryInterceptor` throws for one that tries.
+- **Values** are checked in `ComplexityQueryCompiler.CompileQueryCore`, which returns the delegate EF caches and runs for every execution. That is internal API (EF1001), suppressed in that one file, and it is only registered when a value level is set or `throwAt` is passed. Whether values are checked is decided before any query exists, so a per query override cannot turn the value checks on, and `QueryInterceptor` throws for one that tries.
+- **A query that throws** does so while Entity Framework compiles it, and Entity Framework does not cache a query that fails to compile. `ComplexityQueryCompiler.CompileQueryCore` catches the `QueryComplexityException` and returns a delegate that throws a new one with the same message and violations. Entity Framework caches that like any compiled query, so a failing shape is measured and printed once.
 - `ValueChecker.Check` is the only code that runs for every execution, so it reads each value once for both sets of levels and allocates nothing until something is violated.
 
 ### Markers

@@ -3,8 +3,8 @@
 /// </summary>
 /// <remarks>
 /// Only runs when a query shape is compiled, which is once for each distinct shape, so the cost is
-/// paid once and a shape is logged once. A query that throws is never cached, so it throws again
-/// every time it is used.
+/// paid once and a shape is logged once. A query that throws does so every time it is used, but
+/// ComplexityQueryCompiler caches the failure in place of the query, so it is measured once too.
 /// </remarks>
 sealed class QueryInterceptor :
     IQueryExpressionInterceptor
@@ -28,9 +28,9 @@ sealed class QueryInterceptor :
             return stripped;
         }
 
-        // The value checks need Entity Framework's query compiler, which is only replaced when the
-        // configured levels have a value level. An override cannot turn them on afterwards, so say
-        // so rather than skipping a check the query asked for.
+        // The value checks are only set up when the configured levels have a value level, which is
+        // decided before any query exists. An override cannot turn them on afterwards, so say so
+        // rather than skipping a check the query asked for.
         if (@override is {HasValueLevels: true} &&
             !extension.HasValueLevels)
         {

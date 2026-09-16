@@ -226,19 +226,23 @@ public class ValueTests
         Assert.Throws<QueryComplexityException>(() => query(context, 5000));
     }
 
+    // Replaced for a value level, or for throw levels of any kind, since the compiler also caches a
+    // query that throws
     [Test]
-    public async Task QueryCompilerOnlyReplacedForValueLevels()
+    public async Task QueryCompilerOnlyReplacedWhenNeeded()
     {
         await Assert.That(ReplacesQueryCompiler(Limits.None)).IsFalse();
+        await Assert.That(ReplacesQueryCompiler(Limits.None with {MaxNodes = 10})).IsFalse();
         await Assert.That(ReplacesQueryCompiler(Limits.None with {MaxTake = 10})).IsTrue();
         await Assert.That(ReplacesQueryCompiler(Limits.None with {MaxInValues = 10})).IsTrue();
+        await Assert.That(ReplacesQueryCompiler(Limits.None, Limits.None)).IsTrue();
     }
 
-    static bool ReplacesQueryCompiler(QueryComplexityLimits logAt)
+    static bool ReplacesQueryCompiler(QueryComplexityLimits logAt, QueryComplexityLimits? throwAt = null)
     {
         var options = new DbContextOptionsBuilder<TestDbContext>()
             .UseSqlServer("Server=.;Database=Test;")
-            .UseQueryComplexity(logAt)
+            .UseQueryComplexity(logAt, throwAt)
             .Options;
 
         var replaced = options.FindExtension<CoreOptionsExtension>()?.ReplacedServices;

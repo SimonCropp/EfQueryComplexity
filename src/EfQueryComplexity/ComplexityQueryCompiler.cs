@@ -5,7 +5,7 @@
 using Microsoft.EntityFrameworkCore.Query.Internal;
 
 /// <summary>
-/// Checks the values a query is executed with.
+/// Checks the values a query is executed with, and caches a query that throws.
 /// </summary>
 /// <remarks>
 /// A Take count and a Contains list only exist while a query executes, so they cannot be checked by
@@ -13,6 +13,10 @@ using Microsoft.EntityFrameworkCore.Query.Internal;
 /// returns the delegate Entity Framework caches and then runs for every execution, including for
 /// compiled queries, so wrapping it catches every execution while the query is still only measured
 /// once.
+///
+/// A query over a throw level throws while it is compiled, and Entity Framework does not cache a
+/// query that fails to compile. Returning a delegate that throws instead lets it cache the failure
+/// like any other query.
 /// </remarks>
 sealed class ComplexityQueryCompiler :
     QueryCompiler
@@ -48,9 +52,17 @@ sealed class ComplexityQueryCompiler :
         IModel model,
         bool async)
     {
-        var checker = BuildChecker(query);
-        var compiled = base.CompileQueryCore<TResult>(database, query, model, async);
+        Func<QueryContext, TResult> compiled;
+        try
+        {
+            compiled = base.CompileQueryCore<TResult>(database, query, model, async);
+        }
+        catch (QueryComplexityException exception)
+        {
+            return Throw<TResult>(exception);
+        }
 
+        var checker = BuildChecker(query);
         if (checker == null)
         {
             return compiled;
@@ -63,6 +75,16 @@ sealed class ComplexityQueryCompiler :
         };
     }
 
+    // Returned in place of the query, so Entity Framework caches the failure, and later executions
+    // throw without the query being compiled, measured and printed again. Each execution gets its own
+    // exception, since one instance thrown on several threads at once would share a stack trace.
+    static Func<QueryContext, TResult> Throw<TResult>(QueryComplexityException exception)
+    {
+        var message = exception.Message;
+        var violations = exception.Violations;
+        return _ => throw new QueryComplexityException(message, violations);
+    }
+
     ValueChecker? BuildChecker(Expression query)
     {
         var extension = currentContext.Context
@@ -73,9 +95,8 @@ sealed class ComplexityQueryCompiler :
             return null;
         }
 
-        // The markers are still in the query here, since this runs before the interceptor. They are
-        // only read, since the interceptor is what removes them, and a tree built here would be
-        // thrown away.
+        // The interceptor removes the markers from its own copy of the query, so they are still in
+        // this one. They are only read, since a tree built here would be thrown away.
         var (ignore, @override) = MarkerReader.Read(query);
         if (ignore)
         {

@@ -38,8 +38,8 @@ public sealed record QueryComplexityOverride
     /// <summary>Whether a query that returns rows without a Take fires.</summary>
     public bool? RejectUnbounded { get; init; }
 
-    // Checked on every execution, so it needs the query compiler that UseQueryComplexity only
-    // replaces when the configured levels have a value level
+    // Checked on every execution, which UseQueryComplexity only sets up when the configured levels
+    // have a value level
     internal bool HasValueLevels =>
         MaxTake != null ||
         MaxInValues != null;
