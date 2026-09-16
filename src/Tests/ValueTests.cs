@@ -95,6 +95,81 @@ public class ValueTests
         await Assert.That(exception.Violations.Single().Actual).IsEqualTo(3);
     }
 
+    // Neither a collection nor a generic collection, so the values are counted by enumerating them
+    [Test]
+    public async Task ContainsEnumerable()
+    {
+        var (context, _) = ContextBuilder.Build(throwAt: Limits.None with {MaxInValues = 10});
+        var ids = Ids(50);
+
+        var exception = Assert.Throws<QueryComplexityException>(
+            () => context.Employees.Where(_ => ids.Contains(_.Id)).ToQueryString());
+
+        await Assert.That(exception.Violations.Single().Actual).IsEqualTo(50);
+    }
+
+    static IEnumerable<int> Ids(int count)
+    {
+        for (var index = 0; index < count; index++)
+        {
+            yield return index;
+        }
+    }
+
+    [Test]
+    public async Task CompiledQueryContainsArray()
+    {
+        var (context, _) = ContextBuilder.Build(throwAt: Limits.None with {MaxInValues = 10});
+        var query = EF.CompileQuery((TestDbContext data, int[] ids) => data.Employees.Where(_ => ids.Contains(_.Id)));
+
+        var exception = Assert.Throws<QueryComplexityException>(() => query(context, Enumerable.Range(0, 50).ToArray()));
+
+        await Assert.That(exception.Violations.Single().Actual).IsEqualTo(50);
+    }
+
+    [Test]
+    public async Task CompiledQueryContainsInlineValues()
+    {
+        var (context, _) = ContextBuilder.Build(throwAt: Limits.None with {MaxInValues = 2});
+        var query = EF.CompileQuery((TestDbContext data) => data.Employees.Where(_ => new[] {1, 2, 3}.Contains(_.Id)));
+
+        var exception = Assert.Throws<QueryComplexityException>(() => query(context));
+
+        await Assert.That(exception.Violations.Single().Actual).IsEqualTo(3);
+    }
+
+    // A value level is set, but the query has nothing for it to check
+    [Test]
+    public async Task QueryWithoutValues()
+    {
+        var (context, logs) = ContextBuilder.Build(
+            logAt: Limits.None with {MaxTake = 1},
+            throwAt: Limits.None with {MaxInValues = 1});
+
+        context.Employees.Where(_ => _.Salary > 10).ToQueryString();
+
+        await Assert.That(logs.Count).IsEqualTo(0);
+    }
+
+    // Calling UseQueryComplexity again without value levels leaves the query compiler replaced, and it
+    // then has nothing to check
+    [Test]
+    public async Task QueryCompilerWithoutValueLevels()
+    {
+        var (context, logs) = ContextBuilder.Build(
+            logAt: Limits.None with {MaxTake = 1},
+            configure: _ => _.UseQueryComplexity(Limits.None));
+
+        var replaced = context.GetService<IDbContextOptions>()
+            .FindExtension<CoreOptionsExtension>()!
+            .ReplacedServices!;
+        await Assert.That(replaced.Values.Contains(typeof(ComplexityQueryCompiler))).IsTrue();
+
+        context.Employees.Take(5000).ToQueryString();
+
+        await Assert.That(logs.Count).IsEqualTo(0);
+    }
+
     [Test]
     public async Task ContainsSmallList()
     {

@@ -17,12 +17,9 @@ sealed class QueryInterceptor :
             return query;
         }
 
+        // Added by UseQueryComplexity along with this interceptor
         var extension = context.GetService<IDbContextOptions>()
-            .FindExtension<QueryComplexityOptionsExtension>();
-        if (extension == null)
-        {
-            return query;
-        }
+            .FindExtension<QueryComplexityOptionsExtension>()!;
 
         // The markers have to go, or Entity Framework cannot translate the query
         var (stripped, ignore, @override) = MarkerReader.Strip(query);

@@ -85,12 +85,6 @@ sealed class ComplexityQueryCompiler :
         var logAt = extension.LogAt.Apply(@override);
         var throwAt = extension.ThrowAt?.Apply(@override);
 
-        if (!logAt.HasValueLevels &&
-            throwAt?.HasValueLevels != true)
-        {
-            return null;
-        }
-
         var plan = ValuePlan.Build(query);
         if (plan.IsEmpty)
         {

@@ -51,7 +51,6 @@ sealed class ShapeAnalyzer(IModel model) :
 
         if (declaringType == typeof(Queryable) ||
             declaringType == typeof(Enumerable) ||
-            declaringType == typeof(MemoryExtensions) ||
             declaringType == typeof(EntityFrameworkQueryableExtensions) ||
             declaringType == typeof(RelationalQueryableExtensions))
         {
@@ -86,28 +85,17 @@ sealed class ShapeAnalyzer(IModel model) :
     // shorter depth, and the longest wins.
     static int ChainDepth(MethodCallExpression node)
     {
-        var depth = 0;
+        var depth = Segments(node.Arguments[1]);
         var current = node;
 
-        while (true)
+        // A ThenInclude can only follow an Include or another ThenInclude
+        while (current.Method.Name == "ThenInclude")
         {
+            current = (MethodCallExpression) current.Arguments[0];
             depth += Segments(current.Arguments[1]);
-
-            if (current.Method.Name == "Include")
-            {
-                return depth;
-            }
-
-            if (current.Arguments[0] is MethodCallExpression previous &&
-                previous.Method.DeclaringType == typeof(EntityFrameworkQueryableExtensions) &&
-                previous.Method.Name is "Include" or "ThenInclude")
-            {
-                current = previous;
-                continue;
-            }
-
-            return depth;
         }
+
+        return depth;
     }
 
     // The navigations one Include or ThenInclude names
@@ -119,12 +107,7 @@ sealed class ShapeAnalyzer(IModel model) :
             return text.Split('.').Length;
         }
 
-        if (path is not UnaryExpression {Operand: LambdaExpression lambda})
-        {
-            return 1;
-        }
-
-        var body = lambda.Body;
+        var body = ((LambdaExpression) ((UnaryExpression) path).Operand).Body;
         var segments = 0;
 
         while (true)
@@ -144,12 +127,8 @@ sealed class ShapeAnalyzer(IModel model) :
                 case UnaryExpression unary:
                     body = unary.Operand;
                     continue;
-                case MemberExpression {Expression: { } inner} member:
-                    if (!IsNavigationCandidate(member))
-                    {
-                        return Math.Max(segments, 1);
-                    }
-
+                // Include paths only contain navigations, so every member in the path counts
+                case MemberExpression {Expression: { } inner}:
                     segments++;
                     body = inner;
                     continue;
@@ -158,10 +137,6 @@ sealed class ShapeAnalyzer(IModel model) :
             }
         }
     }
-
-    // Include paths only contain navigations, so every member in the path counts
-    static bool IsNavigationCandidate(MemberExpression member) =>
-        member.Member is PropertyInfo or FieldInfo;
 
     int NavigationsInChain(MemberExpression node)
     {
@@ -183,17 +158,12 @@ sealed class ShapeAnalyzer(IModel model) :
 
     bool IsNavigation(MemberInfo member)
     {
+        // A member expression only ever reads a property or a field
         var type = member switch
         {
             PropertyInfo property => property.PropertyType,
-            FieldInfo field => field.FieldType,
-            _ => null
+            _ => ((FieldInfo) member).FieldType
         };
-
-        if (type == null)
-        {
-            return false;
-        }
 
         if (navigations.TryGetValue(type, out var isNavigation))
         {

@@ -85,6 +85,30 @@ public class ShapeTests
                     IncludeDepth))
             .IsEqualTo(1);
 
+    // A cast inside the path is looked through
+    [Test]
+    public async Task IncludeDepthLooksThroughCasts() =>
+        await Assert.That(
+                Measure(
+                    context => context.Companies
+                        .Include(_ => ((Company) (object) _).Departments)
+                        .ThenInclude(_ => _.Employees),
+                    IncludeDepth))
+            .IsEqualTo(2);
+
+    // Not a navigation, and Entity Framework does not evaluate it early, so it is measured before
+    // Entity Framework rejects it. The query still has to fail with Entity Framework's error.
+    [Test]
+    public async Task InvalidIncludeKeepsEntityFrameworkError()
+    {
+        var (context, _) = ContextBuilder.Build(throwAt: Limits.None with {MaxIncludeDepth = 10});
+
+        var exception = Assert.Throws<InvalidOperationException>(
+            () => context.Companies.Include(_ => Guid.NewGuid()).ToQueryString());
+
+        await Assert.That(exception.Message).Contains("Include");
+    }
+
     [Test]
     public async Task IncludeCountCountsEachInclude() =>
         await Assert.That(

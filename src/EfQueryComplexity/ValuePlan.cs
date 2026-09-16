@@ -63,20 +63,13 @@ sealed class ValuePlan :
     {
         var declaringType = node.Method.DeclaringType;
 
+        // Entity Framework has already rewritten Contains on an array to Enumerable, including where
+        // C# 14 binds it to MemoryExtensions, and evaluated a literal list to a constant
         var arguments = node.Arguments;
         if (declaringType == typeof(Enumerable) &&
             arguments.Count == 2)
         {
             TrackCollection(arguments[0]);
-            return;
-        }
-
-        // C# 14 binds Contains on an array to MemoryExtensions, through a first class span
-        // conversion
-        if (declaringType == typeof(MemoryExtensions) &&
-            arguments.Count == 2)
-        {
-            TrackCollection(Unwrap(arguments[0]));
             return;
         }
 
@@ -100,37 +93,6 @@ sealed class ValuePlan :
             case ConstantExpression {Value: IEnumerable values}:
                 inConstant = Math.Max(inConstant, Counter.Count(values));
                 break;
-            case NewArrayExpression array:
-                inConstant = Math.Max(inConstant, array.Expressions.Count);
-                break;
-            case ListInitExpression list:
-                inConstant = Math.Max(inConstant, list.Initializers.Count);
-                break;
-        }
-    }
-
-    static Expression Unwrap(Expression expression)
-    {
-        while (true)
-        {
-            switch (expression)
-            {
-                case UnaryExpression
-                {
-                    NodeType: ExpressionType.Convert or ExpressionType.ConvertChecked
-                } unary:
-                    expression = unary.Operand;
-                    continue;
-                case MethodCallExpression
-                {
-                    Method.Name: "op_Implicit" or "AsSpan",
-                    Arguments.Count: 1
-                } call:
-                    expression = call.Arguments[0];
-                    continue;
-                default:
-                    return expression;
-            }
         }
     }
 
