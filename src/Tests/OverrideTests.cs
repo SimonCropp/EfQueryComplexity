@@ -146,6 +146,25 @@ public class OverrideTests
             .IgnoreStackTrace();
     }
 
+    // The value checks read the markers rather than removing them, so the query is only stripped
+    // once a message is built
+    [Test]
+    public Task ValueMessageExcludesMarkers()
+    {
+        var (context, _) = ContextBuilder.Build(throwAt: Limits.None with {MaxTake = 10});
+
+        return Throws(
+                () => context.Employees
+                    .WithQueryComplexity(
+                        new()
+                        {
+                            MaxTake = 20
+                        })
+                    .Take(5000)
+                    .ToQueryString())
+            .IgnoreStackTrace();
+    }
+
     [Test]
     public async Task MarkersAreRemovedFromSql()
     {

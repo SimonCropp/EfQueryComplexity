@@ -73,8 +73,10 @@ sealed class ComplexityQueryCompiler :
             return null;
         }
 
-        // The markers are still in the query here, since this runs before the interceptor
-        var (_, ignore, @override) = MarkerReader.Strip(query);
+        // The markers are still in the query here, since this runs before the interceptor. They are
+        // only read, since the interceptor is what removes them, and a tree built here would be
+        // thrown away.
+        var (ignore, @override) = MarkerReader.Read(query);
         if (ignore)
         {
             return null;

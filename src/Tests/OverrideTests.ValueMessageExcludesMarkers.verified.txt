@@ -1,0 +1,17 @@
+﻿{
+  Type: QueryComplexityException,
+  Violations: [
+    {
+      Limit: MaxTake,
+      Max: 20,
+      Actual: 5000
+    }
+  ],
+  Message:
+Query complexity limits exceeded:
+ * MaxTake: 5000 exceeds 20
+Change a level for this query with WithQueryComplexity(), skip every check with IgnoreQueryComplexity(), or change the levels passed to UseQueryComplexity().
+Query:
+DbSet<Employee>()
+    .Take(@p)
+}

@@ -86,5 +86,7 @@ sealed class ValueChecker(
         }
     }
 
-    string Print() => printed ??= ExpressionPrinter.Print(query);
+    // Stripped here rather than while the query is compiled, since a message is only built for a
+    // violation, and printing the markers would show a query nobody wrote
+    string Print() => printed ??= ExpressionPrinter.Print(MarkerReader.Strip(query).Query);
 }

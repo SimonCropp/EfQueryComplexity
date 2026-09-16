@@ -1,28 +1,9 @@
 # Todo
 
-Findings from a review on 2026-09-16. 1 to 9 are fixed. What is left keeps its original number.
+Findings from a review on 2026-09-16. 1 to 10 are fixed, 11 turned out not to be real, and 12 is
+what is left.
 
 ## Performance
-
-### 10. A tree is rebuilt and dropped
-
-[src/EfQueryComplexity/ComplexityQueryCompiler.cs:77](src/EfQueryComplexity/ComplexityQueryCompiler.cs#L77)
-
-`MarkerReader.Strip` is called for the ignore flag and the override, and the stripped tree is
-discarded. A read only scan avoids rebuilding the spine of every query that carries a marker.
-
-A value message therefore still prints the query with its markers in it, unlike a shape message. If
-the stripped tree is kept rather than dropped, hand it to the `ValueChecker` and the two paths read
-the same.
-
-### 11. Every compiled query holds its expression tree
-
-[src/EfQueryComplexity/ValueChecker.cs:8](src/EfQueryComplexity/ValueChecker.cs#L8)
-
-The checker is captured by the delegate Entity Framework caches, so a compiled query with a value
-plan keeps its whole expression tree, and anything constant in it such as an `EF.Constant`
-collection, for as long as the cache entry lives. It is only needed to print a message for a
-violation. Clearing the field after the first print would at least bound it.
 
 ### 12. Smaller ones
 
@@ -35,6 +16,21 @@ violation. Clearing the field after the first print would at least bound it.
 - `Counter` caches an accessor for every collection type it sees and never trims, so a type from a
   collectible assembly is held for the life of the process.
   [src/EfQueryComplexity/Counter.cs:6](src/EfQueryComplexity/Counter.cs#L6)
+
+## Not a problem
+
+### 11. Every compiled query holds its expression tree
+
+`ValueChecker` keeps the query expression so it can print a message for a violation, which looked
+like it pinned a tree for the life of a compiled query cache entry. Entity Framework pins the same
+tree anyway: `CompiledQueryCacheKeyGenerator.CompiledQueryCacheKey` has an `Expression _query` field
+and is the key the compiled query cache is keyed by, and
+`RelationalCommandCache.CommandCacheKey` holds one as well. `QueryCompiler.ExecuteCore` passes one
+expression instance to both the cache key and `CompileQueryCore`, so the field is another reference
+to an object that is already held, not another tree.
+
+The one case left is `EF.CompileQuery`, which does not use that cache, and there the tree is held for
+as long as the caller holds the compiled query. That is small enough to leave alone.
 
 ## Fixed
 
@@ -53,7 +49,6 @@ violation. Clearing the field after the first print would at least bound it.
   referenced by the test project.
 - **5. The message printed the query the markers were still in.** `QueryInterceptor` prints the
   stripped query, which is the one it measured. Covered by `OverrideTests.MessageExcludesMarkers`.
-  The value path still prints its markers, which is part of 10.
 - **6. The message was built even when the event was ignored.** `ComplexityLogger.Log` takes a
   `Func<string>` and asks `ShouldLog` and `NeedsEventData` first, so a silenced or filtered event no
   longer prints the query expression.
@@ -64,3 +59,7 @@ violation. Clearing the field after the first print would at least bound it.
   the plan is built.
 - **9. Reflection for every execution of a HashSet Contains.** `Counter` compiles a
   `Func<object, int>` for each type instead of caching a `PropertyInfo`.
+- **10. A tree was rebuilt and dropped.** `MarkerReader.Read` reads the markers without rebuilding,
+  and `ComplexityQueryCompiler` uses it. `ValueChecker` strips lazily when it builds a message, so a
+  value message no longer prints the markers either. Covered by
+  `OverrideTests.ValueMessageExcludesMarkers`.

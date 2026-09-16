@@ -39,7 +39,7 @@ Levels come from `UseQueryComplexity(logAt, throwAt, sqlServerCostLimit)` and li
 | `QueryInterceptor.cs` | `IQueryExpressionInterceptor`: measures shape and strips markers, once per compiled shape |
 | `ShapeAnalyzer.cs` | One pass measuring nodes, depth, operators, navigations and includes |
 | `UnboundedDetector.cs` | Whether a query can return an unlimited number of rows |
-| `Markers.cs`, `MarkerReader.cs` | The per query marker calls, and reading and removing them |
+| `Markers.cs`, `MarkerReader.cs` | The per query marker calls, and reading (`Read`) and removing (`Strip`) them |
 | `ComplexityQueryCompiler.cs` | Wraps the cached delegate so values are checked for every execution |
 | `ValuePlan.cs`, `ValueChecker.cs`, `Counter.cs` | Where Take counts and Contains lists come from, and checking them |
 | `Violations.cs`, `ComplexityLogger.cs` | Comparing against levels, message text, and logging through EF |
@@ -53,7 +53,7 @@ Levels come from `UseQueryComplexity(logAt, throwAt, sqlServerCostLimit)` and li
 
 ### Markers
 
-`IgnoreQueryComplexity()` and `WithQueryComplexity()` put a call to a method on `Markers` into the query. The override argument is `[NotParameterized]`, which keeps it a constant so it can be read while the query is compiled, and makes it part of the compiled query cache key. `QueryInterceptor` removes the calls, without which Entity Framework cannot translate the query.
+`IgnoreQueryComplexity()` and `WithQueryComplexity()` put a call to a method on `Markers` into the query. The override argument is `[NotParameterized]`, which keeps it a constant so it can be read while the query is compiled, and makes it part of the compiled query cache key. `QueryInterceptor` removes the calls with `MarkerReader.Strip`, without which Entity Framework cannot translate the query. `ComplexityQueryCompiler` runs first and only needs what they asked for, so it uses `MarkerReader.Read`, which rebuilds nothing.
 
 ## Testing conventions
 
