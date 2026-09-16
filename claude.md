@@ -63,6 +63,20 @@ Levels come from `UseQueryComplexity(logAt, throwAt, sqlServerCostLimit)` and li
 - **The `SqlInstance` is built in `AssemblySetup`, in a `[Before(HookType.Assembly)]` hook, never in a `[ModuleInitializer]`.** Microsoft.Testing.Platform can start the test exe twice, and both processes would build the same template at once.
 - Levels in tests start from `Limits.None`, so only the check under test is on.
 
+## Benchmarks
+
+`src/Benchmarks` is BenchmarkDotNet, and has to run as a Release build. `dotnet test` skips it. Run it from its own directory, so results land in its `BenchmarkDotNet.Artifacts`, which is gitignored:
+
+```bash
+cd src/Benchmarks
+dotnet run --configuration Release -- --filter "*CounterBenchmarks*"
+```
+
+On a CPU with efficiency cores, add `--affinity` with a mask of the performance cores, such as `--affinity 15` for the first four. Otherwise a run can move to a slower core partway through, and identical code measures several times slower.
+
+- ProjectDefaults signs it with `key.snk`, like `Tests`, and `InternalsVisibleTo` names it, so a benchmark can call an internal type such as `Counter`.
+- Its own `Directory.Build.props` sets `IsPackageProject` to false. ProjectDefaults reads that before the project file and packs every Release project where it is not false, and the publish workflow pushes everything in `nugets`.
+
 ## Docs are generated
 
 `readme.md` contains `snippet:` regions filled in by **MarkdownSnippets** when `Tests` builds, sourced from `#region` blocks in `src/Tests/Snippets.cs`. Never hand-edit inside a generated snippet block; change the snippet source and rebuild. Snippet lines wrap at 80 characters.

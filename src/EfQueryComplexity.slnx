@@ -7,6 +7,7 @@
     <File Path="Directory.Build.props" />
     <File Path="Directory.Packages.props" />
   </Folder>
+  <Project Path="Benchmarks/Benchmarks.csproj" />
   <Project Path="EfQueryComplexity/EfQueryComplexity.csproj" />
   <Project Path="Tests/Tests.csproj" />
 </Solution>

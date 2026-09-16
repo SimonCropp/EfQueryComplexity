@@ -1,0 +1,9 @@
+<Project>
+  <Import Project="../Directory.Build.props" />
+  <PropertyGroup>
+    <!-- ProjectDefaults reads this before the project file, and packs any Release project it is not
+         false for, so it cannot be set in Benchmarks.csproj -->
+    <IsPackageProject>false</IsPackageProject>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+</Project>
