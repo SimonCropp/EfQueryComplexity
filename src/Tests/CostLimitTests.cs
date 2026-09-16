@@ -89,17 +89,10 @@ public class CostLimitTests
         await Assert.ThrowsAsync<InvalidOperationException>(() => context.Database.OpenConnectionAsync());
     }
 
-    // Calling UseQueryComplexity again without a cost limit leaves the interceptor registered, and it
-    // then has nothing to apply
     [Test]
     public async Task InterceptorWithoutLimitDoesNothing()
     {
-        await using var context = new TestDbContext(
-            new DbContextOptionsBuilder<TestDbContext>()
-                .UseSqlServer(new FakeConnection())
-                .UseQueryComplexity(Limits.None, sqlServerCostLimit: 1)
-                .UseQueryComplexity(Limits.None)
-                .Options);
+        await using var context = BuildWithoutLimit();
 
         var database = context.Database;
         await database.OpenConnectionAsync();
@@ -107,11 +100,31 @@ public class CostLimitTests
         await database.OpenConnectionAsync();
     }
 
+    // A synchronous open goes through a different interceptor method than an async one. Not async, so
+    // the open stays synchronous.
+    [Test]
+    public void InterceptorWithoutLimitDoesNothingSynchronously()
+    {
+        using var context = BuildWithoutLimit();
+
+        context.Database.OpenConnection();
+    }
+
     static TestDbContext Build(SqlDatabase<TestDbContext> database) =>
         new(
             new DbContextOptionsBuilder<TestDbContext>()
                 .UseSqlServer(database.ConnectionString)
                 .UseQueryComplexity(Limits.None, sqlServerCostLimit: 1)
+                .Options);
+
+    // Calling UseQueryComplexity again without a cost limit leaves the interceptor registered, and it
+    // then has nothing to apply
+    static TestDbContext BuildWithoutLimit() =>
+        new(
+            new DbContextOptionsBuilder<TestDbContext>()
+                .UseSqlServer(new FakeConnection())
+                .UseQueryComplexity(Limits.None, sqlServerCostLimit: 1)
+                .UseQueryComplexity(Limits.None)
                 .Options);
 
     // Opens without connecting to anything, so the interceptor sees a connection that is not
