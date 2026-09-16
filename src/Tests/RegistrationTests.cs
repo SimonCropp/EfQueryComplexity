@@ -71,6 +71,32 @@ public class RegistrationTests
         await Assert.That(exception.Message).Contains("greater than zero");
     }
 
+    // Throwing is checked first, so a throw level under its log level leaves the log level with
+    // nothing to report
+    [Test]
+    public async Task ThrowLevelUnderLogLevelIsRejected()
+    {
+        // Entity Framework validates the options as the context is constructed, so this is as early
+        // as it can be found
+        var exception = Assert.Throws<InvalidOperationException>(
+            () => ContextBuilder.Build(
+                logAt: Limits.None with {MaxNodes = 1000},
+                throwAt: Limits.None with {MaxNodes = 100}));
+
+        await Assert.That(exception.Message).Contains("MaxNodes");
+    }
+
+    // The same levels for both is how to say "only throw", so it is left alone
+    [Test]
+    public void EqualLevelsAreAllowed()
+    {
+        var (context, _) = ContextBuilder.Build(
+            logAt: Limits.None with {MaxNodes = 1000},
+            throwAt: Limits.None with {MaxNodes = 1000});
+
+        context.Employees.ToQueryString();
+    }
+
     static ICompiledQueryCache Cache(TestDbContext context) =>
         context.GetService<ICompiledQueryCache>();
 

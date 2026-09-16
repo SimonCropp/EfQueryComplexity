@@ -64,8 +64,27 @@ static class Violations
         builder.AppendLine();
         builder.AppendLine("Change a level for this query with WithQueryComplexity(), skip every check with IgnoreQueryComplexity(), or change the levels passed to UseQueryComplexity().");
         builder.AppendLine("Query:");
-        builder.Append(query);
+        AppendQuery(builder, query);
         return builder.ToString();
+    }
+
+    // The query that broke a level is exactly the query that prints long, so an unbounded message
+    // would put tens of kilobytes into the log line reporting it, and into the exception. The head of
+    // a query is what identifies it.
+    const int MaxQueryLength = 1000;
+
+    static void AppendQuery(StringBuilder builder, string query)
+    {
+        if (query.Length <= MaxQueryLength)
+        {
+            builder.Append(query);
+            return;
+        }
+
+        builder.Append(query, 0, MaxQueryLength);
+        builder.Append("… (");
+        builder.Append(query.Length - MaxQueryLength);
+        builder.Append(" more characters)");
     }
 
     static string Describe(QueryComplexityViolation violation)

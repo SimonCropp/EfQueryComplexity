@@ -56,6 +56,25 @@ public class LoggingTests
         await Assert.That(exception.Message).Contains("QueryComplexityEventId.LimitExceeded");
     }
 
+    // The query that broke a level is the one that prints long, so the message bounds it rather than
+    // putting the whole tree in every log line that reports it
+    [Test]
+    public async Task LongQueryIsTruncated()
+    {
+        var (context, _) = ContextBuilder.Build(throwAt: Limits.None with {MaxNodes = 1});
+
+        var query = context.Employees.AsQueryable();
+        for (var index = 0; index < 100; index++)
+        {
+            query = query.Where(_ => _.Salary > 10);
+        }
+
+        var exception = Assert.Throws<QueryComplexityException>(() => query.ToQueryString());
+
+        await Assert.That(exception.Message).Contains("more characters)");
+        await Assert.That(exception.Message.Length).IsLessThan(1500);
+    }
+
     [Test]
     public async Task ConfigureWarningsCanIgnore()
     {

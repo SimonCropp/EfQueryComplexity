@@ -84,6 +84,8 @@ protected override void OnConfiguring(DbContextOptionsBuilder builder) =>
 
 A query that exceeds a throw level throws `QueryComplexityException`, which carries every level it exceeded in `Violations`.
 
+A query is checked against the throw levels before the log levels, so a throw level below its log level would leave that log level unreachable. That is rejected as the context is constructed, rather than quietly logging nothing. Passing the same levels for both is allowed, and is how to say "only throw".
+
 
 ## Checks
 
@@ -181,6 +183,8 @@ protected override void OnConfiguring(DbContextOptionsBuilder builder) =>
 <!-- endSnippet -->
 
 Use `Ignore` instead of `Throw` to silence it.
+
+The message names every level that was exceeded and then prints the query, bounded to 1000 characters. The query that broke a level is the one that prints long, and without a bound every log line reporting it would carry the whole expression tree.
 
 
 ## SQL Server cost limit

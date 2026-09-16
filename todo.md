@@ -1,7 +1,42 @@
 # Todo
 
 Findings from a review on 2026-09-16. 1 to 10 are fixed, 11 turned out not to be real, and 12 is
-what is left.
+what is left. 13 onwards came from comparing the API against Scry's.
+
+## From the Scry comparison
+
+Scry (`C:\Code\Papyrine\Scry`) enforces its own limits on its wire AST, before anything reaches
+Entity Framework. Two of its checks have no equivalent here, and both are worth having for any
+Entity Framework app rather than only for a Scry one.
+
+### 13. No bound on projection width
+
+Nothing counts the members a projection names. Scry's `MaxProjectionMembers` defaults to 256. A
+`Select` naming hundreds of columns is a real cost, and the count is there in the
+`MemberInitExpression` or `NewExpression`.
+
+### 14. No bound on correlated subqueries
+
+Scry's `MaxCorrelatedSubqueries` defaults to 64. A per row subquery is one of the more expensive
+shapes a query can take, and the shape analyzer already walks every node — a subquery whose lambda
+reads the outer parameter is identifiable there.
+
+### 15. Level names differ from Scry's for the same idea
+
+`MaxOperators`/`MaxPipelineLength`, `MaxNodes`/`MaxExpressionNodes`, `MaxDepth`/`MaxExpressionDepth`,
+`MaxTake`/`MaxPageSize`. Defensible, since the two count different trees, but anyone using both reads
+them side by side. **This expires on first publish**, after which renaming is breaking.
+
+### 16. Defaults are not in the XML docs
+
+Scry states each default in the member's own summary ("Default 1000."). Here they are only in
+`LogDefaults` and the readme table, so an IDE tooltip does not say what a level starts at.
+
+### 17. Measuring costs more than refusing
+
+Scry checks `MaxPipelineLength` before its walk "so the cost of refusing is not the cost of
+validating". `ShapeAnalyzer` walks the whole tree and then compares, so a query that blows a throw
+level on its tenth node is still measured to its last. Related to the fourth bullet of 12.
 
 ## Performance
 
@@ -59,6 +94,15 @@ as long as the caller holds the compiled query. That is small enough to leave al
   the plan is built.
 - **9. Reflection for every execution of a HashSet Contains.** `Counter` compiles a
   `Func<object, int>` for each type instead of caching a `PropertyInfo`.
+- **A. The message had no bound** (from Scry's `ScryValidationException.MaxMessageLength`).
+  `Violations.BuildMessage` printed the whole query, so the query that broke a level — the one that
+  prints long — put its entire tree into every log line reporting it. Bounded to 1000 characters with
+  the remainder counted. Covered by `LoggingTests.LongQueryIsTruncated`.
+- **B. A throw level under its log level was accepted** (from Scry validating its options at
+  startup). Throwing is checked first, so such a log level can never be reached.
+  `QueryComplexityOptionsExtension.Validate` — previously an empty method — now rejects it as the
+  context is constructed. Equal levels are still allowed, since that is how to say "only throw".
+  Covered by `RegistrationTests.ThrowLevelUnderLogLevelIsRejected` and `EqualLevelsAreAllowed`.
 - **10. A tree was rebuilt and dropped.** `MarkerReader.Read` reads the markers without rebuilding,
   and `ComplexityQueryCompiler` uses it. `ValueChecker` strips lazily when it builds a message, so a
   value message no longer prints the markers either. Covered by
