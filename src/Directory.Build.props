@@ -6,9 +6,9 @@
     <LangVersion>latest</LangVersion>
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
     <Version>0.1.1</Version>
-    <AssemblyVersion>1.0.0</AssemblyVersion>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+    <AssemblyVersion>1.0.0</AssemblyVersion>
     <PackageTags>EntityFramework, EFCore, Query, Complexity</PackageTags>
     <Description>Detects overly complex Entity Framework Core queries (expression size, depth, operators, navigations, includes, unbounded results, Take and IN-list sizes) and logs or throws based on configurable levels.</Description>
     <Verify_SponsorshipExemption>OpenSource</Verify_SponsorshipExemption>
