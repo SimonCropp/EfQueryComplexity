@@ -108,6 +108,27 @@ public class ValueTests
         await Assert.That(exception.Violations.Single().Actual).IsEqualTo(50);
     }
 
+    // Select over a list knows its count, so the check does not run the selector
+    [Test]
+    public async Task ContainsSelect()
+    {
+        var (context, _) = ContextBuilder.Build(throwAt: Limits.None with {MaxInValues = 10});
+        var selected = 0;
+        var ids = Enumerable.Range(0, 50)
+            .ToList()
+            .Select(_ =>
+            {
+                selected++;
+                return _;
+            });
+
+        var exception = Assert.Throws<QueryComplexityException>(
+            () => context.Employees.Where(_ => ids.Contains(_.Id)).ToQueryString());
+
+        await Assert.That(exception.Violations.Single().Actual).IsEqualTo(50);
+        await Assert.That(selected).IsEqualTo(0);
+    }
+
     static IEnumerable<int> Ids(int count)
     {
         for (var index = 0; index < count; index++)

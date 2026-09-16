@@ -5,6 +5,8 @@ static class Counter
 {
     static ConcurrentDictionary<Type, Func<object, int>?> counts = new();
 
+    static MethodInfo countOf = typeof(Counter).GetMethod(nameof(CountOf), BindingFlags.NonPublic | BindingFlags.Static)!;
+
     public static int Count(object? value)
     {
         switch (value)
@@ -15,8 +17,7 @@ static class Counter
                 return collection.Count;
         }
 
-        // A HashSet, and anything else that only implements the generic interfaces, still knows its
-        // own count
+        // A HashSet, a LINQ iterator, and anything else that only implements the generic interfaces
         var count = counts.GetOrAdd(value.GetType(), BuildCount);
         if (count != null)
         {
@@ -31,40 +32,49 @@ static class Counter
         return 0;
     }
 
-    // Compiled once for each type, since reading the property through reflection would be paid for
-    // every execution of every query that uses one
+    // Built once for each type, since the element type is only known at runtime, and finding it
+    // would otherwise be paid for every execution of every query that uses one
     static Func<object, int>? BuildCount(Type type)
     {
         foreach (var @interface in type.GetInterfaces())
         {
-            if (!@interface.IsGenericType)
+            if (@interface.IsGenericType &&
+                @interface.GetGenericTypeDefinition() == typeof(IEnumerable<>))
             {
-                continue;
+                return countOf
+                    .MakeGenericMethod(@interface.GetGenericArguments()[0])
+                    .CreateDelegate<Func<object, int>>();
             }
-
-            var definition = @interface.GetGenericTypeDefinition();
-            if (definition != typeof(ICollection<>) &&
-                definition != typeof(IReadOnlyCollection<>))
-            {
-                continue;
-            }
-
-            var property = @interface.GetProperty("Count");
-            if (property == null)
-            {
-                continue;
-            }
-
-            var parameter = Expression.Parameter(typeof(object));
-            var lambda = Expression.Lambda<Func<object, int>>(
-                Expression.Property(
-                    Expression.Convert(parameter, @interface),
-                    property),
-                parameter);
-            return lambda.Compile();
         }
 
         return null;
+    }
+
+    static int CountOf<T>(object value)
+    {
+        var values = (IEnumerable<T>) value;
+
+        // Also answered by a LINQ iterator that knows its count, such as Select over a list, so the
+        // selector is not run just to count
+        if (values.TryGetNonEnumeratedCount(out var count))
+        {
+            return count;
+        }
+
+        if (values is IReadOnlyCollection<T> collection)
+        {
+            return collection.Count;
+        }
+
+        // Enumerated as T, so a value type is not boxed
+        var enumerated = 0;
+
+        foreach (var item in values)
+        {
+            enumerated++;
+        }
+
+        return enumerated;
     }
 
     static int Enumerate(IEnumerable enumerable)

@@ -29,12 +29,44 @@ public class CounterTests
     public async Task Enumerable() =>
         await Assert.That(Counter.Count(Values(3))).IsEqualTo(3);
 
+    // A LINQ iterator over a list knows its count, so the selector is not run just to count
+    [Test]
+    public async Task SelectIterator()
+    {
+        var selected = 0;
+        var values = new List<int> {1, 2, 3}.Select(_ =>
+        {
+            selected++;
+            return _;
+        });
+
+        await Assert.That(Counter.Count(values)).IsEqualTo(3);
+        await Assert.That(selected).IsEqualTo(0);
+    }
+
+    // A filter has no count until it runs, so the values are enumerated
+    [Test]
+    public async Task WhereIterator() =>
+        await Assert.That(Counter.Count(new List<int> {1, 2, 3}.Where(_ => _ > 1))).IsEqualTo(2);
+
+    [Test]
+    public async Task NonGenericEnumerable() =>
+        await Assert.That(Counter.Count(new NonGenericValues())).IsEqualTo(3);
+
     static IEnumerable<int> Values(int count)
     {
         for (var index = 0; index < count; index++)
         {
             yield return index;
         }
+    }
+
+    // Only the non-generic interface, so there is no element type to count with
+    class NonGenericValues :
+        IEnumerable
+    {
+        public IEnumerator GetEnumerator() =>
+            new[] {1, 2, 3}.GetEnumerator();
     }
 
     // Only IReadOnlyCollection, so the count comes from that interface
