@@ -10,14 +10,26 @@ sealed class ValueChecker(
     List<string> logged = [];
     string? printed;
 
+    // Whether a value has to be read at all is settled while the query is compiled
+    bool checkTake = logAt.MaxTake != null ||
+                     throwAt?.MaxTake != null;
+
+    bool checkInValues = logAt.MaxInValues != null ||
+                         throwAt?.MaxInValues != null;
+
     public void Check(QueryContext queryContext)
     {
         var parameters = queryContext.Parameters;
 
+        // This runs for every execution, so each value is read once and then compared against both
+        // sets of levels
+        var take = checkTake ? plan.LargestTake(parameters) : 0;
+        var inValues = checkInValues ? plan.LargestInValues(parameters) : 0;
+
         if (throwAt != null)
         {
-            var violations = plan.Evaluate(parameters, throwAt);
-            if (violations.Count > 0)
+            var violations = Violations.ForValues(take, inValues, throwAt);
+            if (violations != null)
             {
                 throw new QueryComplexityException(
                     Violations.BuildMessage(violations, Print()),
@@ -25,8 +37,8 @@ sealed class ValueChecker(
             }
         }
 
-        var logViolations = plan.Evaluate(parameters, logAt);
-        if (logViolations.Count == 0)
+        var logViolations = Violations.ForValues(take, inValues, logAt);
+        if (logViolations == null)
         {
             return;
         }
@@ -54,7 +66,24 @@ sealed class ValueChecker(
             return;
         }
 
-        ComplexityLogger.Log(queryContext.QueryLogger, Violations.BuildMessage(fresh, Print()));
+        try
+        {
+            ComplexityLogger.Log(queryContext.QueryLogger, () => Violations.BuildMessage(fresh, Print()));
+        }
+        catch
+        {
+            // ConfigureWarnings can turn this event into an error. Nothing was logged, so the levels
+            // are left for the next execution to find, or only the first execution would throw.
+            lock (logged)
+            {
+                foreach (var violation in fresh)
+                {
+                    logged.Remove(violation.Limit);
+                }
+            }
+
+            throw;
+        }
     }
 
     string Print() => printed ??= ExpressionPrinter.Print(query);

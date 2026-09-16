@@ -37,6 +37,25 @@ public class LoggingTests
         await Assert.That(exception.Message).Contains("QueryComplexityEventId.LimitExceeded");
     }
 
+    // A value is only known while a query runs, so an escalated value violation has to throw for
+    // every execution, rather than only for the execution that would have logged it
+    [Test]
+    public async Task ConfigureWarningsThrowsForEveryValueExecution()
+    {
+        var (context, _) = ContextBuilder.Build(
+            logAt: Limits.None with {MaxTake = 10},
+            configure: builder => builder.ConfigureWarnings(_ => _.Throw(QueryComplexityEventId.LimitExceeded)));
+
+        var take = 5000;
+
+        Assert.Throws<InvalidOperationException>(() => context.Employees.Take(take).ToQueryString());
+
+        var exception = Assert.Throws<InvalidOperationException>(
+            () => context.Employees.Take(take).ToQueryString());
+
+        await Assert.That(exception.Message).Contains("QueryComplexityEventId.LimitExceeded");
+    }
+
     [Test]
     public async Task ConfigureWarningsCanIgnore()
     {

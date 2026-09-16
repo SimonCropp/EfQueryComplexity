@@ -119,6 +119,7 @@ These values only exist while a query runs, so they are checked for every execut
 
 - The package uses an internal API (EF1001), so it is tied to the Entity Framework major version it was built for.
 - It conflicts with any other library that replaces `IQueryCompiler`, since the last one registered wins.
+- A per query override cannot turn these checks on, since whether to register is decided before any query exists. `WithQueryComplexity` that sets `MaxTake` or `MaxInValues`, for a context where neither is set, throws rather than leaving the query unchecked.
 
 A value that is over a log level is logged the first time a compiled query exceeds it, rather than on every execution. A value over a throw level throws every time.
 
@@ -157,6 +158,8 @@ var employees = await context.Employees
 <!-- endSnippet -->
 
 Every level left null keeps the configured value, and a level that is set replaces both the log and the throw level for that check. An override never starts throwing for a context that was not given throw levels. To turn one check off for a query use `int.MaxValue`.
+
+`MaxTake` and `MaxInValues` can only be changed for a query when the configured levels set one of them, since the value checks are otherwise not registered at all. An override that sets one anyway throws.
 
 Each distinct set of levels is a constant in the query, so a query using them is compiled and checked separately.
 

@@ -31,6 +31,16 @@ sealed class QueryInterceptor :
             return stripped;
         }
 
+        // The value checks need Entity Framework's query compiler, which is only replaced when the
+        // configured levels have a value level. An override cannot turn them on afterwards, so say
+        // so rather than skipping a check the query asked for.
+        if (@override is {HasValueLevels: true} &&
+            !extension.HasValueLevels)
+        {
+            throw new InvalidOperationException(
+                "WithQueryComplexity sets MaxTake or MaxInValues, but neither is set in the levels passed to UseQueryComplexity, so the value checks are not registered and the override cannot be honored. Set MaxTake or MaxInValues in UseQueryComplexity, or remove them from the override.");
+        }
+
         var logAt = extension.LogAt.Apply(@override);
         var throwAt = extension.ThrowAt?.Apply(@override);
 
@@ -58,7 +68,7 @@ sealed class QueryInterceptor :
         {
             ComplexityLogger.Log(
                 context.GetService<IDiagnosticsLogger<DbLoggerCategory.Query>>(),
-                Violations.BuildMessage(logViolations, ExpressionPrinter.Print(query)));
+                () => Violations.BuildMessage(logViolations, ExpressionPrinter.Print(query)));
         }
 
         return stripped;

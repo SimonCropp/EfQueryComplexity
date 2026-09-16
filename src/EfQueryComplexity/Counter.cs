@@ -3,7 +3,7 @@
 /// </summary>
 static class Counter
 {
-    static ConcurrentDictionary<Type, PropertyInfo?> counts = new();
+    static ConcurrentDictionary<Type, Func<object, int>?> counts = new();
 
     public static int Count(object? value)
     {
@@ -17,10 +17,10 @@ static class Counter
 
         // A HashSet, and anything else that only implements the generic interfaces, still knows its
         // own count
-        var property = counts.GetOrAdd(value.GetType(), FindCount);
-        if (property != null)
+        var count = counts.GetOrAdd(value.GetType(), BuildCount);
+        if (count != null)
         {
-            return (int) property.GetValue(value)!;
+            return count(value);
         }
 
         if (value is IEnumerable enumerable)
@@ -31,7 +31,9 @@ static class Counter
         return 0;
     }
 
-    static PropertyInfo? FindCount(Type type)
+    // Compiled once for each type, since reading the property through reflection would be paid for
+    // every execution of every query that uses one
+    static Func<object, int>? BuildCount(Type type)
     {
         foreach (var @interface in type.GetInterfaces())
         {
@@ -41,11 +43,25 @@ static class Counter
             }
 
             var definition = @interface.GetGenericTypeDefinition();
-            if (definition == typeof(ICollection<>) ||
-                definition == typeof(IReadOnlyCollection<>))
+            if (definition != typeof(ICollection<>) &&
+                definition != typeof(IReadOnlyCollection<>))
             {
-                return @interface.GetProperty("Count");
+                continue;
             }
+
+            var property = @interface.GetProperty("Count");
+            if (property == null)
+            {
+                continue;
+            }
+
+            var parameter = Expression.Parameter(typeof(object));
+            var lambda = Expression.Lambda<Func<object, int>>(
+                Expression.Property(
+                    Expression.Convert(parameter, @interface),
+                    property),
+                parameter);
+            return lambda.Compile();
         }
 
         return null;

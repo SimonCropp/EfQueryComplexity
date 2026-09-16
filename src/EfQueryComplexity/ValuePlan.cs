@@ -5,9 +5,11 @@
 sealed class ValuePlan :
     ExpressionVisitor
 {
-    List<int> takeConstants = [];
+    // A constant is fixed once the query is compiled, so the largest is folded here rather than
+    // measured again for every execution
+    int takeConstant;
+    int inConstant;
     List<string> takeParameters = [];
-    List<int> inConstants = [];
     List<string> inParameters = [];
 
     public static ValuePlan Build(Expression query)
@@ -18,9 +20,9 @@ sealed class ValuePlan :
     }
 
     public bool IsEmpty =>
-        takeConstants.Count == 0 &&
+        takeConstant == 0 &&
         takeParameters.Count == 0 &&
-        inConstants.Count == 0 &&
+        inConstant == 0 &&
         inParameters.Count == 0;
 
     protected override Expression VisitMethodCall(MethodCallExpression node)
@@ -52,7 +54,7 @@ sealed class ValuePlan :
                 takeParameters.Add(parameter.Name);
                 break;
             case ConstantExpression {Value: int value}:
-                takeConstants.Add(value);
+                takeConstant = Math.Max(takeConstant, value);
                 break;
         }
     }
@@ -61,19 +63,20 @@ sealed class ValuePlan :
     {
         var declaringType = node.Method.DeclaringType;
 
+        var arguments = node.Arguments;
         if (declaringType == typeof(Enumerable) &&
-            node.Arguments.Count == 2)
+            arguments.Count == 2)
         {
-            TrackCollection(node.Arguments[0]);
+            TrackCollection(arguments[0]);
             return;
         }
 
         // C# 14 binds Contains on an array to MemoryExtensions, through a first class span
         // conversion
         if (declaringType == typeof(MemoryExtensions) &&
-            node.Arguments.Count == 2)
+            arguments.Count == 2)
         {
-            TrackCollection(Unwrap(node.Arguments[0]));
+            TrackCollection(Unwrap(arguments[0]));
             return;
         }
 
@@ -95,13 +98,13 @@ sealed class ValuePlan :
             case ConstantExpression {Value: string}:
                 break;
             case ConstantExpression {Value: IEnumerable values}:
-                inConstants.Add(Counter.Count(values));
+                inConstant = Math.Max(inConstant, Counter.Count(values));
                 break;
             case NewArrayExpression array:
-                inConstants.Add(array.Expressions.Count);
+                inConstant = Math.Max(inConstant, array.Expressions.Count);
                 break;
             case ListInitExpression list:
-                inConstants.Add(list.Initializers.Count);
+                inConstant = Math.Max(inConstant, list.Initializers.Count);
                 break;
         }
     }
@@ -112,10 +115,17 @@ sealed class ValuePlan :
         {
             switch (expression)
             {
-                case UnaryExpression {NodeType: ExpressionType.Convert or ExpressionType.ConvertChecked} unary:
+                case UnaryExpression
+                {
+                    NodeType: ExpressionType.Convert or ExpressionType.ConvertChecked
+                } unary:
                     expression = unary.Operand;
                     continue;
-                case MethodCallExpression {Method.Name: "op_Implicit" or "AsSpan", Arguments.Count: 1} call:
+                case MethodCallExpression
+                {
+                    Method.Name: "op_Implicit" or "AsSpan",
+                    Arguments.Count: 1
+                } call:
                     expression = call.Arguments[0];
                     continue;
                 default:
@@ -124,63 +134,41 @@ sealed class ValuePlan :
         }
     }
 
-    public List<QueryComplexityViolation> Evaluate(IReadOnlyDictionary<string, object?> parameters, QueryComplexityLimits limits)
+    public int LargestTake(IReadOnlyDictionary<string, object?> parameters)
     {
-        var violations = new List<QueryComplexityViolation>();
+        var take = takeConstant;
 
-        if (limits.MaxTake is { } maxTake)
+        foreach (var name in takeParameters)
         {
-            var take = Largest(takeConstants);
-
-            foreach (var name in takeParameters)
+            if (parameters.TryGetValue(name, out var value) &&
+                value is int parameterTake &&
+                parameterTake > take)
             {
-                if (parameters.TryGetValue(name, out var value) &&
-                    value is int parameterTake &&
-                    parameterTake > take)
-                {
-                    take = parameterTake;
-                }
+                take = parameterTake;
             }
-
-            Violations.Add(violations, nameof(QueryComplexityLimits.MaxTake), maxTake, take);
         }
 
-        if (limits.MaxInValues is { } maxInValues)
-        {
-            var count = Largest(inConstants);
-
-            foreach (var name in inParameters)
-            {
-                if (!parameters.TryGetValue(name, out var value))
-                {
-                    continue;
-                }
-
-                var parameterCount = Counter.Count(value);
-                if (parameterCount > count)
-                {
-                    count = parameterCount;
-                }
-            }
-
-            Violations.Add(violations, nameof(QueryComplexityLimits.MaxInValues), maxInValues, count);
-        }
-
-        return violations;
+        return take;
     }
 
-    static int Largest(List<int> values)
+    public int LargestInValues(IReadOnlyDictionary<string, object?> parameters)
     {
-        var largest = 0;
+        var count = inConstant;
 
-        foreach (var value in values)
+        foreach (var name in inParameters)
         {
-            if (value > largest)
+            if (!parameters.TryGetValue(name, out var value))
             {
-                largest = value;
+                continue;
+            }
+
+            var parameterCount = Counter.Count(value);
+            if (parameterCount > count)
+            {
+                count = parameterCount;
             }
         }
 
-        return largest;
+        return count;
     }
 }

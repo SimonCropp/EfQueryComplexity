@@ -48,7 +48,8 @@ Levels come from `UseQueryComplexity(logAt, throwAt, sqlServerCostLimit)` and li
 ### Two places, because of when values exist
 
 - **Shape** is measured in `QueryCompilationStarting`, which runs only when a shape is compiled. Values are not visible there: Entity Framework has already replaced a `Take` count or a `Contains` list with a parameter, and a different value does not recompile.
-- **Values** are checked in `ComplexityQueryCompiler.CompileQueryCore`, which returns the delegate EF caches and runs for every execution. That is internal API (EF1001), suppressed in that one file, and it is only registered when a value level is set.
+- **Values** are checked in `ComplexityQueryCompiler.CompileQueryCore`, which returns the delegate EF caches and runs for every execution. That is internal API (EF1001), suppressed in that one file, and it is only registered when a value level is set. Registration is decided before any query exists, so a per query override cannot turn the value checks on, and `QueryInterceptor` throws for one that tries.
+- `ValueChecker.Check` is the only code that runs for every execution, so it reads each value once for both sets of levels and allocates nothing until something is violated.
 
 ### Markers
 

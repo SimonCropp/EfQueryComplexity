@@ -68,6 +68,44 @@ public class OverrideTests
         await Assert.That(logs.Count).IsEqualTo(1);
     }
 
+    // The value checks are only registered when the configured levels have a value level, so an
+    // override cannot turn them on for one query, and silently skipping the check would be worse
+    [Test]
+    public async Task ValueOverrideNeedsConfiguredValueLevels()
+    {
+        var (context, _) = ContextBuilder.Build(logAt: Limits.None);
+
+        var exception = Assert.Throws<InvalidOperationException>(
+            () => context.Employees
+                .WithQueryComplexity(
+                    new()
+                    {
+                        MaxTake = 10
+                    })
+                .Take(5000)
+                .ToQueryString());
+
+        await Assert.That(exception.Message).Contains("MaxTake");
+    }
+
+    // A shape level has no such restriction, since the interceptor is always registered
+    [Test]
+    public async Task ShapeOverrideWithoutConfiguredShapeLevels()
+    {
+        var (context, logs) = ContextBuilder.Build(logAt: Limits.None);
+
+        context.Employees
+            .Where(_ => _.Salary > 10)
+            .WithQueryComplexity(
+                new()
+                {
+                    MaxNodes = 1
+                })
+            .ToQueryString();
+
+        await Assert.That(logs.Count).IsEqualTo(1);
+    }
+
     [Test]
     public void OutermostOverrideWins()
     {

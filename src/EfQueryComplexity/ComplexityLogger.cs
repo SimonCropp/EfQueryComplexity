@@ -8,20 +8,40 @@ static class ComplexityLogger
     // kept per set of logging options
     static readonly ConditionalWeakTable<ILoggingOptions, EventDefinition<string>> definitions = new();
 
-    public static void Log(IDiagnosticsLogger<DbLoggerCategory.Query> diagnostics, string message)
-    {
-        var definition = definitions.GetValue(diagnostics.Options, Create);
+    static readonly ConditionalWeakTable<ILoggingOptions, EventDefinition<string>>.CreateValueCallback create = Create;
 
-        if (diagnostics.ShouldLog(definition))
+    /// <summary>
+    /// Logs a message, built only once something is listening.
+    /// </summary>
+    /// <remarks>
+    /// Building a message prints the whole query expression, which is not cheap, and the event can
+    /// be silenced with ConfigureWarnings or filtered out by level.
+    /// </remarks>
+    public static void Log(IDiagnosticsLogger<DbLoggerCategory.Query> diagnostics, Func<string> message)
+    {
+        var definition = definitions.GetValue(diagnostics.Options, create);
+
+        var shouldLog = diagnostics.ShouldLog(definition);
+        var needsEventData = diagnostics.NeedsEventData(definition, out var diagnosticSourceEnabled, out var simpleLogEnabled);
+
+        if (!shouldLog &&
+            !needsEventData)
         {
-            definition.Log(diagnostics, message);
+            return;
         }
 
-        if (diagnostics.NeedsEventData(definition, out var diagnosticSourceEnabled, out var simpleLogEnabled))
+        var text = message();
+
+        if (shouldLog)
+        {
+            definition.Log(diagnostics, text);
+        }
+
+        if (needsEventData)
         {
             var eventData = new EventData(
                 definition,
-                (definitionBase, _) => ((EventDefinition<string>) definitionBase).GenerateMessage(message));
+                (definitionBase, _) => ((EventDefinition<string>) definitionBase).GenerateMessage(text));
             diagnostics.DispatchEventData(definition, eventData, diagnosticSourceEnabled, simpleLogEnabled);
         }
     }

@@ -22,6 +22,26 @@ static class Violations
         return violations;
     }
 
+    // Null rather than an empty list, since this runs for every execution and a query that stays
+    // inside its levels should not allocate
+    public static List<QueryComplexityViolation>? ForValues(int take, int inValues, QueryComplexityLimits limits)
+    {
+        List<QueryComplexityViolation>? violations = null;
+
+        if (take > limits.MaxTake)
+        {
+            violations = [new(nameof(QueryComplexityLimits.MaxTake), limits.MaxTake, take)];
+        }
+
+        if (inValues > limits.MaxInValues)
+        {
+            violations ??= [];
+            violations.Add(new(nameof(QueryComplexityLimits.MaxInValues), limits.MaxInValues, inValues));
+        }
+
+        return violations;
+    }
+
     public static void Add(List<QueryComplexityViolation> violations, string limit, int? max, int actual)
     {
         if (actual > max)

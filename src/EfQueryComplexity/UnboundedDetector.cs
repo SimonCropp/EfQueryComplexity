@@ -16,8 +16,13 @@ static class UnboundedDetector
 
     static bool IsBounded(Expression expression)
     {
-        while (expression is MethodCallExpression {Method.IsStatic: true, Arguments.Count: > 0} call)
+        while (expression is MethodCallExpression
+               {
+                   Method.IsStatic: true,
+                   Arguments.Count: > 0
+               } call)
         {
+            var arguments = call.Arguments;
             if (call.Method.DeclaringType == typeof(Queryable))
             {
                 switch (call.Method.Name)
@@ -38,13 +43,13 @@ static class UnboundedDetector
                     case "Concat":
                     case "Union":
                     case "UnionBy":
-                        return IsBounded(call.Arguments[0]) &&
-                               IsBounded(call.Arguments[1]);
+                        return IsBounded(arguments[0]) &&
+                               IsBounded(arguments[1]);
                 }
             }
 
             // Everything else returns no more rows than its source, so keep walking towards the root
-            expression = call.Arguments[0];
+            expression = arguments[0];
         }
 
         return false;
