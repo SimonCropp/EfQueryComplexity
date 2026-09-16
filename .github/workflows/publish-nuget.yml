@@ -1,0 +1,104 @@
+name: Publish NuGet
+
+# Packs EfQueryComplexity and pushes it to nuget.org using Trusted Publishing (OIDC), so no long
+# lived API key is stored anywhere. GitHub Actions mints a short lived OIDC token; the NuGet/login
+# action exchanges it for a temporary nuget.org API key, issued only because a matching
+# trusted-publishing policy is registered for this repo and this workflow file.
+#
+# One-time setup, which must be done before the first tag or the push fails. On nuget.org ->
+# username -> Trusted Publishing, add a policy with:
+#   Repository Owner: SimonCropp
+#   Repository:       EfQueryComplexity
+#   Workflow File:    publish-nuget.yml   (file name only, no .github/workflows/ path)
+#   Environment:      leave empty
+# Scope it to allow publishing new packages, with the glob EfQueryComplexity, since the package ID
+# has never been published. A policy on a private repo starts out active for only 7 days, until a
+# first successful publish makes it permanent.
+#
+# The version comes from Version in src/Directory.Build.props, not from the tag, so bump that first
+# and tag the commit that carries it.
+on:
+  push:
+    tags:
+      - '*'
+  workflow_dispatch:
+
+permissions:
+  # Required: lets the job request a GitHub OIDC token.
+  id-token: write
+  contents: read
+
+env:
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+  DOTNET_NOLOGO: true
+
+jobs:
+  publish:
+    # Windows for the same reason as the test workflow: the database tests need LocalDB.
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Start LocalDB
+        run: |
+          sqllocaldb info
+          sqllocaldb start MSSQLLocalDB
+
+      # A plain build is the pack step: ProjectDefaults sets GeneratePackageOnBuild for every
+      # Release package project, so the package is produced into ./nugets. Deliberately not
+      # `dotnet pack`, which on a solution races with GeneratePackageOnBuild.
+      - name: Build and pack
+        run: dotnet build src --configuration Release
+
+      # A tag is the last cheap moment to find out. Running the suite here rather than trusting the
+      # test workflow on the same commit costs a couple of minutes.
+      - name: Test
+        run: dotnet test --solution src/EfQueryComplexity.slnx --configuration Release --no-build --no-restore
+
+      - name: Upload packages
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: packages
+          path: nugets/*.nupkg
+          if-no-files-found: error
+
+      # Trusted publishing. nuget.org validates GitHub's OIDC token against the policy naming this
+      # repository and this workflow file, and returns a key good for about an hour - so this stays
+      # immediately before the push. Reached only when every step above succeeded.
+      - name: NuGet login
+        id: login
+        uses: NuGet/login@v1
+        with:
+          # The nuget.org account the trusted publishing policy belongs to.
+          user: SimonCropp
+
+      # Enumerated rather than globbed. This job runs on Windows, where the shell is pwsh and a
+      # quoted wildcard reaches dotnet unexpanded, so "nugets/*.nupkg" is read as a literal filename
+      # and the push fails with "File does not exist".
+      #
+      # --skip-duplicate makes re-runs idempotent.
+      - name: Push to nuget.org
+        run: |
+          $packages = Get-ChildItem -Path nugets -Filter *.nupkg
+          if ($packages.Count -eq 0)
+          {
+            throw "No packages were produced by the build."
+          }
+
+          Write-Host "Pushing $($packages.Count) packages"
+          foreach ($package in $packages)
+          {
+            dotnet nuget push $package.FullName --api-key "${{ steps.login.outputs.NUGET_API_KEY }}" --source https://api.nuget.org/v3/index.json --skip-duplicate
+            if ($LASTEXITCODE -ne 0)
+            {
+              throw "Failed to push $($package.Name)"
+            }
+          }

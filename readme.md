@@ -1,6 +1,6 @@
 # <img src="/src/icon.png" height="30px"> EfQueryComplexity
 
-[![Build status](https://img.shields.io/appveyor/build/SimonCropp/efquerycomplexity)](https://ci.appveyor.com/project/SimonCropp/efquerycomplexity)
+[![Build status](https://github.com/SimonCropp/EfQueryComplexity/actions/workflows/test.yml/badge.svg?branch=main)](https://github.com/SimonCropp/EfQueryComplexity/actions/workflows/test.yml)
 [![NuGet Status](https://img.shields.io/nuget/v/EfQueryComplexity.svg)](https://www.nuget.org/packages/EfQueryComplexity/)
 
 **See [Milestones](../../milestones?state=closed) for release notes.**

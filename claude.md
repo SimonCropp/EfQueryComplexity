@@ -66,6 +66,13 @@ Levels come from `UseQueryComplexity(logAt, throwAt, sqlServerCostLimit)` and li
 
 `readme.md` contains `snippet:` regions filled in by **MarkdownSnippets** when `Tests` builds, sourced from `#region` blocks in `src/Tests/Snippets.cs`. Never hand-edit inside a generated snippet block; change the snippet source and rebuild. Snippet lines wrap at 80 characters.
 
+## CI
+
+GitHub Actions, two workflows:
+
+- `.github/workflows/test.yml` builds and tests on every push to main and every PR. Windows only, because the database tests need LocalDB, which it starts explicitly so a missing LocalDB fails as a clear error rather than a timeout. Received snapshots are uploaded as an artifact when a test fails.
+- `.github/workflows/publish-nuget.yml` runs on any tag push. It builds, packs, tests, then pushes to nuget.org with Trusted Publishing (OIDC), so no API key is stored. It needs a one-time trusted publishing policy on nuget.org, scoped to this repo and that workflow file. The version comes from `Version` in `src/Directory.Build.props`, not from the tag, so bump it and tag that commit.
+
 ## Code conventions
 
 - Public types live in the `EfQueryComplexity` namespace. Internal types have no namespace and live in the global namespace.
