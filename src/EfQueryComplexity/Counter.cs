@@ -3,7 +3,7 @@
 /// </summary>
 static class Counter
 {
-    static readonly ConcurrentDictionary<Type, PropertyInfo?> counts = new();
+    static ConcurrentDictionary<Type, PropertyInfo?> counts = new();
 
     public static int Count(object? value)
     {

@@ -7,7 +7,7 @@ sealed class ValueChecker(
     QueryComplexityLimits? throwAt,
     Expression query)
 {
-    readonly List<string> logged = [];
+    List<string> logged = [];
     string? printed;
 
     public void Check(QueryContext queryContext)

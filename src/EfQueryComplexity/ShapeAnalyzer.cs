@@ -6,7 +6,7 @@ sealed class ShapeAnalyzer(IModel model) :
 {
     // Type lookups are not cached beyond one query, so no type is kept alive for the life of the
     // process
-    readonly Dictionary<Type, bool> navigations = [];
+    Dictionary<Type, bool> navigations = [];
     int nodes;
     int depth;
     int maxDepth;

@@ -17,7 +17,7 @@ using Microsoft.EntityFrameworkCore.Query.Internal;
 sealed class ComplexityQueryCompiler :
     QueryCompiler
 {
-    readonly ICurrentDbContext currentContext;
+    ICurrentDbContext currentContext;
 
     public ComplexityQueryCompiler(
         IQueryContextFactory queryContextFactory,

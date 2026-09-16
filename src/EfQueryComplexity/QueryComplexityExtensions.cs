@@ -7,8 +7,8 @@ public static class QueryComplexityExtensions
 {
     // A singleton interceptor is part of the key for the internal service provider, so a new
     // instance for every options build would also build a new provider
-    static readonly QueryInterceptor queryInterceptor = new();
-    static readonly CostLimitInterceptor costLimitInterceptor = new();
+    static QueryInterceptor queryInterceptor = new();
+    static CostLimitInterceptor costLimitInterceptor = new();
 
     /// <summary>
     /// Enables query complexity checks.

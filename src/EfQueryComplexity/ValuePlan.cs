@@ -5,10 +5,10 @@
 sealed class ValuePlan :
     ExpressionVisitor
 {
-    readonly List<int> takeConstants = [];
-    readonly List<string> takeParameters = [];
-    readonly List<int> inConstants = [];
-    readonly List<string> inParameters = [];
+    List<int> takeConstants = [];
+    List<string> takeParameters = [];
+    List<int> inConstants = [];
+    List<string> inParameters = [];
 
     public static ValuePlan Build(Expression query)
     {
@@ -28,12 +28,13 @@ sealed class ValuePlan :
         var method = node.Method;
         var declaringType = method.DeclaringType;
 
+        var arguments = node.Arguments;
         if (method.Name == "Take" &&
-            node.Arguments.Count == 2 &&
+            arguments.Count == 2 &&
             (declaringType == typeof(Queryable) ||
              declaringType == typeof(Enumerable)))
         {
-            TrackTake(node.Arguments[1]);
+            TrackTake(arguments[1]);
         }
         else if (method.Name == "Contains")
         {
