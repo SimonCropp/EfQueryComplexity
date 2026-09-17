@@ -8,4 +8,4 @@ readonly record struct QueryShape(
     int NavigationDepth,
     int Includes,
     int IncludeDepth,
-    bool Unbounded);
+    IReadOnlyList<Type> UnboundedTypes);

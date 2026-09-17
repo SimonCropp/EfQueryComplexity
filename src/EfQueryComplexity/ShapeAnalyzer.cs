@@ -26,7 +26,7 @@ sealed class ShapeAnalyzer(IModel model) :
             analyzer.navigationDepth,
             analyzer.includes,
             analyzer.includeDepth,
-            UnboundedDetector.IsUnbounded(query));
+            UnboundedDetector.Find(query));
     }
 
     public override Expression? Visit(Expression? node)
@@ -170,7 +170,8 @@ sealed class ShapeAnalyzer(IModel model) :
             return isNavigation;
         }
 
-        isNavigation = IsEntity(ElementType(type));
+        // A collection navigation is measured by what it holds
+        isNavigation = IsEntity(Sequences.ElementType(type));
         navigations.Add(type, isNavigation);
         return isNavigation;
     }
@@ -189,27 +190,6 @@ sealed class ShapeAnalyzer(IModel model) :
         // An owned type is stored with its owner, so reaching into one is not a join
         return entityType != null &&
                !entityType.IsOwned();
-    }
-
-    // A collection navigation is measured by what it holds
-    static Type ElementType(Type type)
-    {
-        if (type == typeof(string) ||
-            !typeof(IEnumerable).IsAssignableFrom(type))
-        {
-            return type;
-        }
-
-        foreach (var @interface in type.GetInterfaces())
-        {
-            if (@interface.IsGenericType &&
-                @interface.GetGenericTypeDefinition() == typeof(IEnumerable<>))
-            {
-                return @interface.GetGenericArguments()[0];
-            }
-        }
-
-        return type;
     }
 
     static void Track(ref int current, int value)

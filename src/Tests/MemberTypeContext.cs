@@ -12,7 +12,7 @@ public class MemberTypeContext(DbContextOptions<MemberTypeContext> options) :
     {
         builder.Entity<Pet>()
             .HasOne(_ => _.Owner)
-            .WithMany()
+            .WithMany(_ => _.Pets)
             .HasForeignKey(_ => _.OwnerId);
 
         builder.Entity<Owner>()
@@ -32,11 +32,16 @@ public class MemberTypeContext(DbContextOptions<MemberTypeContext> options) :
 
 public class Owner
 {
+    List<Pet> pets = [];
+
     public int Id { get; set; }
     public string Name { get; set; } = "";
 
     // Enumerable, but with no element type
     public BitArray Flags { get; set; } = new(0);
+
+    // A collection navigation typed as IEnumerable<T> itself, over a backing field
+    public IEnumerable<Pet> Pets => pets;
 }
 
 public class Pet

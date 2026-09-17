@@ -51,6 +51,41 @@ public class ThrowAtExample :
     #endregion
 }
 
+public class AllExceptExample :
+    DbContext
+{
+    #region RejectUnboundedAllExcept
+
+    protected override void OnConfiguring(DbContextOptionsBuilder builder) =>
+        builder.UseQueryComplexity(
+            logAt: QueryComplexityLimits.LogDefaults with
+            {
+                // Few rows, so returning all of them is fine
+                RejectUnbounded = UnboundedEntities.AllExcept(
+                    typeof(User),
+                    typeof(AccessGroup))
+            });
+
+    #endregion
+}
+
+public class OnlyExample :
+    DbContext
+{
+    #region RejectUnboundedOnly
+
+    protected override void OnConfiguring(DbContextOptionsBuilder builder) =>
+        builder.UseQueryComplexity(
+            logAt: QueryComplexityLimits.LogDefaults with
+            {
+                // Many rows, so every query for them needs a Take
+                RejectUnbounded = UnboundedEntities.Only(
+                    typeof(Commitment))
+            });
+
+    #endregion
+}
+
 public class CostLimitExample :
     DbContext
 {
@@ -135,6 +170,12 @@ public class SnippetEmployee
     public int Id { get; set; }
     public string Name { get; set; } = "";
 }
+
+public class User;
+
+public class AccessGroup;
+
+public class Commitment;
 
 public class AppDbContext :
     DbContext

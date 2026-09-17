@@ -7,5 +7,5 @@
   MaxIncludeDepth: 3,
   MaxTake: 1000,
   MaxInValues: 1000,
-  RejectUnbounded: true
+  RejectUnbounded: All
 }

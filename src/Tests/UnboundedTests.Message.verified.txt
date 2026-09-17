@@ -1,0 +1,18 @@
+﻿{
+  Type: QueryComplexityException,
+  Violations: [
+    {
+      Limit: RejectUnbounded,
+      RowTypes: [
+        Department
+      ]
+    }
+  ],
+  Message:
+Query complexity limits exceeded:
+ * RejectUnbounded: the query returns Department rows without a Take
+Change a level for this query with WithQueryComplexity(), skip every check with IgnoreQueryComplexity(), or change the levels passed to UseQueryComplexity().
+Query:
+DbSet<Department>()
+    .SelectMany(_ => _.Employees)
+}

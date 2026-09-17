@@ -38,7 +38,9 @@ Levels come from `UseQueryComplexity(logAt, throwAt, sqlServerCostLimit)` and li
 | `QueryComplexityOptionsExtension.cs` | Holds the levels, and keys the internal service provider |
 | `QueryInterceptor.cs` | `IQueryExpressionInterceptor`: measures shape and strips markers, once per compiled shape |
 | `ShapeAnalyzer.cs` | One pass measuring nodes, depth, operators, navigations and includes |
-| `UnboundedDetector.cs` | Whether a query can return an unlimited number of rows |
+| `UnboundedDetector.cs` | The types of the rows a query can return without a limit, found once per compiled shape |
+| `UnboundedEntities.cs` | Which of those types `RejectUnbounded` checks: `All`, `None`, `AllExcept`, `Only` |
+| `Sequences.cs` | Whether a type is a sequence, and what it holds |
 | `Markers.cs`, `MarkerReader.cs` | The per query marker calls, and reading (`Read`) and removing (`Strip`) them |
 | `ComplexityQueryCompiler.cs` | Wraps the cached delegate so values are checked for every execution, and caches a query that throws |
 | `ValuePlan.cs`, `ValueChecker.cs`, `Counter.cs` | Where Take counts and Contains lists come from, and checking them |

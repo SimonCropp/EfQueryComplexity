@@ -51,10 +51,162 @@ public class UnboundedTests
         var (context, _) = ContextBuilder.Build();
         var employees = context.Employees;
 
-        await Assert.That(UnboundedDetector.IsUnbounded(Terminal(employees, nameof(Queryable.Count)))).IsFalse();
-        await Assert.That(UnboundedDetector.IsUnbounded(Terminal(employees, nameof(Queryable.First)))).IsFalse();
-        await Assert.That(UnboundedDetector.IsUnbounded(Terminal(employees, nameof(Queryable.Any)))).IsFalse();
-        await Assert.That(UnboundedDetector.IsUnbounded(Terminal(employees, nameof(Queryable.LongCount)))).IsFalse();
+        await Assert.That(UnboundedDetector.Find(Terminal(employees, nameof(Queryable.Count)))).IsEmpty();
+        await Assert.That(UnboundedDetector.Find(Terminal(employees, nameof(Queryable.First)))).IsEmpty();
+        await Assert.That(UnboundedDetector.Find(Terminal(employees, nameof(Queryable.Any)))).IsEmpty();
+        await Assert.That(UnboundedDetector.Find(Terminal(employees, nameof(Queryable.LongCount)))).IsEmpty();
+    }
+
+    // A projection does not change which rows are read
+    [Test]
+    public Task ProjectionReportsTheEntity() =>
+        AssertRowTypes(
+            context => context.Employees.Select(_ => new {_.Name}),
+            "Employee");
+
+    [Test]
+    public Task SelectManyReportsBothTypes() =>
+        AssertRowTypes(
+            context => context.Departments.SelectMany(_ => _.Employees),
+            "Department, Employee");
+
+    [Test]
+    public Task TakeThenSelectManyReportsTheJoinedType() =>
+        AssertRowTypes(
+            context => context.Departments.Take(5).SelectMany(_ => _.Employees),
+            "Employee");
+
+    [Test]
+    public Task SelectManyLooksThroughOperators() =>
+        AssertRowTypes(
+            context => context.Departments
+                .Take(5)
+                .SelectMany(_ => _.Employees.Where(_ => _.Salary > 10).Select(_ => _.Name)),
+            "Employee");
+
+    [Test]
+    public Task NestedSelectManyReportsEveryType() =>
+        AssertRowTypes(
+            context => context.Departments
+                .Take(5)
+                .SelectMany(_ => _.Employees.SelectMany(_ => _.Tasks)),
+            "Employee, EmployeeTask");
+
+    // The SelectMany returns more rows than the joined sequence, whatever limits that sequence
+    [Test]
+    public Task TakeInsideSelectManyDoesNotBound() =>
+        AssertRowTypes(
+            context => context.Departments.Take(5).SelectMany(_ => _.Employees.Take(5)),
+            "Employee");
+
+    [Test]
+    public Task CastInsideSelectManyIsLookedThrough() =>
+        AssertRowTypes(
+            context => context.Departments
+                .Take(5)
+                .SelectMany(_ => (List<EmployeeTask>) _.Employees.SelectMany(_ => _.Tasks)),
+            "Employee, EmployeeTask");
+
+    [Test]
+    public Task PropertyInsideSelectMany() =>
+        AssertRowTypes(
+            context => context.Departments
+                .Take(5)
+                .SelectMany(_ => EF.Property<List<Employee>>(_, nameof(Department.Employees))),
+            "Employee");
+
+    [Test]
+    public Task DbSetInsideSelectMany() =>
+        AssertRowTypes(
+            context => context.Departments
+                .Take(5)
+                .SelectMany(_ => context.Employees.Where(employee => employee.DepartmentId == _.Id)),
+            "Employee");
+
+    [Test]
+    public Task MethodGroupInsideSelectMany() =>
+        AssertRowTypes(
+            context => context.Departments
+                .Take(5)
+                .SelectMany(_ => _.Employees.SelectMany(TasksOf)),
+            "Employee, EmployeeTask");
+
+    static IEnumerable<EmployeeTask> TasksOf(Employee employee) =>
+        employee.Tasks;
+
+    [Test]
+    public Task JoinReportsBothTypes() =>
+        AssertRowTypes(
+            context => context.Departments.Join(
+                context.Employees,
+                _ => _.Id,
+                _ => _.DepartmentId,
+                (_, employee) => employee),
+            "Department, Employee");
+
+    [Test]
+    public Task TakeThenJoinReportsTheJoinedType() =>
+        AssertRowTypes(
+            context => context.Departments.Take(5).Join(
+                context.Employees.Take(5),
+                _ => _.Id,
+                _ => _.DepartmentId,
+                (_, employee) => employee),
+            "Employee");
+
+    [Test]
+    public Task LeftJoinReportsBothTypes() =>
+        AssertRowTypes(
+            context => context.Departments.LeftJoin(
+                context.Employees,
+                _ => _.Id,
+                _ => _.DepartmentId,
+                (_, employee) => employee),
+            "Department, Employee");
+
+    // The grouping each department is joined with is typed IEnumerable<Employee>
+    [Test]
+    public Task GroupJoinIntoDefaultIfEmpty() =>
+        AssertRowTypes(
+            context =>
+                from department in context.Departments
+                join employee in context.Employees
+                    on department.Id equals employee.DepartmentId into employees
+                from employee in employees.DefaultIfEmpty()
+                select department.Name,
+            "Department, Employee");
+
+    [Test]
+    public Task SelectManyOverGroups() =>
+        AssertRowTypes(
+            context => context.Employees.GroupBy(_ => _.DepartmentId).SelectMany(_ => _),
+            "Employee");
+
+    [Test]
+    public Task ConcatReportsBothSides() =>
+        AssertRowTypes(
+            context => context.Departments
+                .Select(_ => _.Name)
+                .Concat(context.Employees.Select(_ => _.Name)),
+            "Department, Employee");
+
+    [Test]
+    public Task ValuesReportTheirType() =>
+        AssertRowTypes(
+            context => context.Database.SqlQuery<int>($"select 1 as Value"),
+            "Int32");
+
+    [Test]
+    public Task Message()
+    {
+        var (context, _) = ContextBuilder.Build(
+            throwAt: Limits.None with
+            {
+                RejectUnbounded = UnboundedEntities.AllExcept(typeof(Employee))
+            });
+
+        return Throws(() => context.Departments.SelectMany(_ => _.Employees).ToQueryString())
+            .IgnoreStackTrace();
     }
 
     static Expression Terminal(IQueryable<Employee> source, string name) =>
@@ -65,6 +217,15 @@ public class UnboundedTests
         var (context, _) = ContextBuilder.Build(throwAt: Limits.None with {RejectUnbounded = true});
         var exception = Assert.Throws<QueryComplexityException>(() => query(context).ToQueryString());
         await Assert.That(exception.Violations.Single().Limit).IsEqualTo("RejectUnbounded");
+    }
+
+    static async Task AssertRowTypes(Func<TestDbContext, IQueryable> query, string expected)
+    {
+        var (context, _) = ContextBuilder.Build(throwAt: Limits.None with {RejectUnbounded = true});
+        var exception = Assert.Throws<QueryComplexityException>(() => query(context).ToQueryString());
+        var violation = exception.Violations.Single();
+        await Assert.That(violation.Limit).IsEqualTo("RejectUnbounded");
+        await Assert.That(string.Join(", ", violation.RowTypes!.Select(_ => _.Name))).IsEqualTo(expected);
     }
 
     static async Task AssertBounded(Func<TestDbContext, IQueryable> query)

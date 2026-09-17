@@ -49,6 +49,40 @@ public class OverrideTests
         await Assert.That(exception.Violations.Single().Max).IsEqualTo(1);
     }
 
+    // An override of true checks every type, whichever types the configured levels name
+    [Test]
+    public void UnboundedOverrideChecksEveryType()
+    {
+        var (context, _) = ContextBuilder.Build(
+            throwAt: Limits.None with
+            {
+                RejectUnbounded = UnboundedEntities.Only(typeof(Department))
+            });
+
+        Assert.Throws<QueryComplexityException>(
+            () => context.Employees
+                .WithQueryComplexity(
+                    new()
+                    {
+                        RejectUnbounded = true
+                    })
+                .ToQueryString());
+    }
+
+    [Test]
+    public void UnboundedOverrideChecksNoType()
+    {
+        var (context, _) = ContextBuilder.Build(throwAt: Limits.None with {RejectUnbounded = true});
+
+        context.Employees
+            .WithQueryComplexity(
+                new()
+                {
+                    RejectUnbounded = false
+                })
+            .ToQueryString();
+    }
+
     // An override changes the levels, but it never starts throwing for a context that was not given
     // throw levels
     [Test]

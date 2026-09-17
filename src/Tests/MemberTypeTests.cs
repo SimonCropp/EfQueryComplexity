@@ -12,6 +12,13 @@ public class MemberTypeTests
         await Assert.That(MeasureNavigationDepth(context => context.Pets.Select(_ => _.Owner.Flags)))
             .IsEqualTo(1);
 
+    // IEnumerable<T> does not list itself among its interfaces, so the element type is read from the
+    // type itself
+    [Test]
+    public async Task EnumerableNavigationIsCounted() =>
+        await Assert.That(MeasureNavigationDepth(context => context.Owners.Select(_ => _.Pets.Count())))
+            .IsEqualTo(1);
+
     static int MeasureNavigationDepth(Func<MemberTypeContext, IQueryable> query)
     {
         // A level of zero fires for any navigation, and the violation reports what the query measures

@@ -35,7 +35,10 @@ public sealed record QueryComplexityOverride
     /// <summary>Maximum number of values in a Contains list.</summary>
     public int? MaxInValues { get; init; }
 
-    /// <summary>Whether a query that returns rows without a Take fires.</summary>
+    /// <summary>
+    /// Whether a query that returns rows without a Take fires. <c>true</c> checks every type, and
+    /// <c>false</c> none, whichever types the configured levels name.
+    /// </summary>
     public bool? RejectUnbounded { get; init; }
 
     // Checked on every execution, which UseQueryComplexity only sets up when the configured levels

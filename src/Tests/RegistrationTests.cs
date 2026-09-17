@@ -43,6 +43,29 @@ public class RegistrationTests
     }
 
     [Test]
+    public async Task UnboundedTypesDecideWhetherAServiceProviderIsShared()
+    {
+        var first = CachedContext(
+            Limits.None with
+            {
+                RejectUnbounded = UnboundedEntities.AllExcept(typeof(Employee), typeof(Department))
+            });
+        var second = CachedContext(
+            Limits.None with
+            {
+                RejectUnbounded = UnboundedEntities.AllExcept(typeof(Department), typeof(Employee))
+            });
+        var third = CachedContext(
+            Limits.None with
+            {
+                RejectUnbounded = UnboundedEntities.Only(typeof(Employee), typeof(Department))
+            });
+
+        await Assert.That(ReferenceEquals(Cache(first), Cache(second))).IsTrue();
+        await Assert.That(ReferenceEquals(Cache(first), Cache(third))).IsFalse();
+    }
+
+    [Test]
     public Task LogFragment()
     {
         var options = new DbContextOptionsBuilder<TestDbContext>()

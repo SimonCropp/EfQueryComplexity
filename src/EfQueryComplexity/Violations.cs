@@ -13,13 +13,38 @@ static class Violations
         Add(violations, nameof(QueryComplexityLimits.MaxIncludes), limits.MaxIncludes, shape.Includes);
         Add(violations, nameof(QueryComplexityLimits.MaxIncludeDepth), limits.MaxIncludeDepth, shape.IncludeDepth);
 
-        if (limits.RejectUnbounded &&
-            shape.Unbounded)
+        var rowTypes = CheckedTypes(shape.UnboundedTypes, limits.RejectUnbounded);
+        if (rowTypes != null)
         {
-            violations.Add(new(nameof(QueryComplexityLimits.RejectUnbounded), null, null));
+            violations.Add(
+                new(nameof(QueryComplexityLimits.RejectUnbounded), null, null)
+                {
+                    RowTypes = rowTypes
+                });
         }
 
         return violations;
+    }
+
+    // The unbounded row types that the levels check, or null when they check none of them
+    static List<Type>? CheckedTypes(IReadOnlyList<Type> unboundedTypes, UnboundedEntities? rejectUnbounded)
+    {
+        if (rejectUnbounded == null)
+        {
+            return null;
+        }
+
+        List<Type>? checkedTypes = null;
+        foreach (var type in unboundedTypes)
+        {
+            if (rejectUnbounded.Covers(type))
+            {
+                checkedTypes ??= [];
+                checkedTypes.Add(type);
+            }
+        }
+
+        return checkedTypes;
     }
 
     // Null rather than an empty list, since this runs for every execution and a query that stays
@@ -71,19 +96,19 @@ static class Violations
     // The query that broke a level is exactly the query that prints long, so an unbounded message
     // would put tens of kilobytes into the log line reporting it, and into the exception. The head of
     // a query is what identifies it.
-    const int MaxQueryLength = 1000;
+    const int maxQueryLength = 1000;
 
     static void AppendQuery(StringBuilder builder, string query)
     {
-        if (query.Length <= MaxQueryLength)
+        if (query.Length <= maxQueryLength)
         {
             builder.Append(query);
             return;
         }
 
-        builder.Append(query, 0, MaxQueryLength);
+        builder.Append(query, 0, maxQueryLength);
         builder.Append("… (");
-        builder.Append(query.Length - MaxQueryLength);
+        builder.Append(query.Length - maxQueryLength);
         builder.Append(" more characters)");
     }
 
@@ -91,7 +116,8 @@ static class Violations
     {
         if (violation.Limit == nameof(QueryComplexityLimits.RejectUnbounded))
         {
-            return "RejectUnbounded: the query returns rows without a Take";
+            var names = string.Join(", ", violation.RowTypes!.Select(_ => _.Name));
+            return $"RejectUnbounded: the query returns {names} rows without a Take";
         }
 
         return $"{violation.Limit}: {violation.Actual} exceeds {violation.Max}";

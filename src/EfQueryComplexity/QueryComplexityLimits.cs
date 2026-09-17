@@ -16,7 +16,10 @@ namespace EfQueryComplexity;
 /// <param name="MaxIncludeDepth">Maximum number of navigations in one Include chain.</param>
 /// <param name="MaxTake">Maximum value passed to Take. Checked on every execution.</param>
 /// <param name="MaxInValues">Maximum number of values in a Contains list. Checked on every execution.</param>
-/// <param name="RejectUnbounded">Whether a query that returns rows without a Take fires.</param>
+/// <param name="RejectUnbounded">
+/// The types for which a query that returns rows without a Take fires. <c>true</c> checks every
+/// type, and <c>false</c> none.
+/// </param>
 public sealed record QueryComplexityLimits(
     int? MaxNodes,
     int? MaxDepth,
@@ -26,7 +29,7 @@ public sealed record QueryComplexityLimits(
     int? MaxIncludeDepth,
     int? MaxTake,
     int? MaxInValues,
-    bool RejectUnbounded)
+    UnboundedEntities? RejectUnbounded)
 {
     /// <summary>
     /// The levels used for logging when none are passed to UseQueryComplexity.
@@ -44,7 +47,7 @@ public sealed record QueryComplexityLimits(
         MaxIncludeDepth: 3,
         MaxTake: 1000,
         MaxInValues: 1000,
-        RejectUnbounded: true);
+        RejectUnbounded: UnboundedEntities.All);
 
     // Measured while a query is compiled
     internal bool HasShapeLevels =>
@@ -54,7 +57,7 @@ public sealed record QueryComplexityLimits(
         MaxNavigationDepth != null ||
         MaxIncludes != null ||
         MaxIncludeDepth != null ||
-        RejectUnbounded;
+        RejectUnbounded is {IsNone: false};
 
     // Measured on every execution, since the values only exist then
     internal bool HasValueLevels =>

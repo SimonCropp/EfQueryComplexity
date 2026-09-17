@@ -124,7 +124,7 @@ A query is checked against the throw levels before the log levels, so a throw le
 | `MaxIncludeDepth` | Navigations in one `Include` chain | While compiled | 3 |
 | `MaxTake` | The value passed to `Take` | Every execution | 1000 |
 | `MaxInValues` | Values in a `Contains` list | Every execution | 1000 |
-| `RejectUnbounded` | A query returning rows with no `Take` | While compiled | on |
+| `RejectUnbounded` | A query returning rows with no `Take` | While compiled | `All` |
 
 A check fires when the measured value is greater than the level. A level of `null` turns that check off.
 
@@ -138,6 +138,54 @@ A query is bounded when it cannot return more rows than a `Take` allows:
 - `SelectMany`, `Join`, `GroupJoin`, `LeftJoin`, `RightJoin` and `Zip` return more rows than their source, so a `Take` below one of them bounds the source rather than the query.
 - `Concat` and `Union` are bounded only when both sides are.
 - Every other operator returns no more rows than its source.
+
+The message names the types of the rows returned without a `Take`, and so does `QueryComplexityViolation.RowTypes`. A row type is the entity a query reads, not what it projects to, so `Employees.Select(_ => _.Name)` returns `Employee` rows. A query that joins in another sequence returns rows of both types: `Departments.SelectMany(_ => _.Employees)` returns `Department` and `Employee` rows.
+
+
+### Choosing the types to check
+
+Most apps know which tables stay small and which grow. `RejectUnbounded` takes an `UnboundedEntities`, so the check can cover only the types where returning every row is a problem. `true` converts to `UnboundedEntities.All` and `false` to `UnboundedEntities.None`.
+
+Check every type except the ones known to have few rows:
+
+<!-- snippet: RejectUnboundedAllExcept -->
+<a id='snippet-RejectUnboundedAllExcept'></a>
+```cs
+protected override void OnConfiguring(DbContextOptionsBuilder builder) =>
+    builder.UseQueryComplexity(
+        logAt: QueryComplexityLimits.LogDefaults with
+        {
+            // Few rows, so returning all of them is fine
+            RejectUnbounded = UnboundedEntities.AllExcept(
+                typeof(User),
+                typeof(AccessGroup))
+        });
+```
+<sup><a href='/src/Tests/Snippets.cs#L57-L69' title='Snippet source file'>snippet source</a> | <a href='#snippet-RejectUnboundedAllExcept' title='Start of snippet'>anchor</a></sup>
+<!-- endSnippet -->
+
+Or check only the types known to have many rows:
+
+<!-- snippet: RejectUnboundedOnly -->
+<a id='snippet-RejectUnboundedOnly'></a>
+```cs
+protected override void OnConfiguring(DbContextOptionsBuilder builder) =>
+    builder.UseQueryComplexity(
+        logAt: QueryComplexityLimits.LogDefaults with
+        {
+            // Many rows, so every query for them needs a Take
+            RejectUnbounded = UnboundedEntities.Only(
+                typeof(Commitment))
+        });
+```
+<sup><a href='/src/Tests/Snippets.cs#L75-L86' title='Snippet source file'>snippet source</a> | <a href='#snippet-RejectUnboundedOnly' title='Start of snippet'>anchor</a></sup>
+<!-- endSnippet -->
+
+- A query fires when it returns rows of any checked type. A query that joins in a type that is not listed still fires for that type, so both types of a `SelectMany` have to be skipped for it to pass.
+- Naming a type also names the types derived from it, and naming an interface names the types that implement it, so a marker interface can list many types at once.
+- A query for a base class returns rows of its derived types too. It is checked by `Only` when a derived type is named, and only skipped by `AllExcept` when the base class is.
+- Rows that are not entities, such as `SqlQuery<int>` or a list of values, are checked by `All` and `AllExcept`, and not by `Only`.
+- Only the rows of the query itself count. A collection loaded by `Include`, or by a projection, is not checked, so with `AllExcept(typeof(User))`, `Users.Include(_ => _.Commitments)` does not fire.
 
 
 ### Take and IN list sizes
@@ -163,7 +211,7 @@ var employees = await context.Employees
     .IgnoreQueryComplexity()
     .ToListAsync();
 ```
-<sup><a href='/src/Tests/Snippets.cs#L103-L110' title='Snippet source file'>snippet source</a> | <a href='#snippet-IgnoreQueryComplexity' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Tests/Snippets.cs#L138-L145' title='Snippet source file'>snippet source</a> | <a href='#snippet-IgnoreQueryComplexity' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Or replace levels for one query:
@@ -181,10 +229,10 @@ var employees = await context.Employees
     .Take(5000)
     .ToListAsync();
 ```
-<sup><a href='/src/Tests/Snippets.cs#L117-L129' title='Snippet source file'>snippet source</a> | <a href='#snippet-WithQueryComplexity' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Tests/Snippets.cs#L152-L164' title='Snippet source file'>snippet source</a> | <a href='#snippet-WithQueryComplexity' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
-Every level left null keeps the configured value, and a level that is set replaces both the log and the throw level for that check. An override never starts throwing for a context that was not given throw levels. To turn one check off for a query use `int.MaxValue`.
+Every level left null keeps the configured value, and a level that is set replaces both the log and the throw level for that check. An override never starts throwing for a context that was not given throw levels. To turn one check off for a query use `int.MaxValue`. `RejectUnbounded` is a `bool` for a query: `true` checks every type and `false` none, whichever types were configured.
 
 `MaxTake` and `MaxInValues` can only be changed for a query when the configured levels set one of them, since the value checks are otherwise not set up at all. An override that sets one anyway throws.
 
@@ -204,7 +252,7 @@ protected override void OnConfiguring(DbContextOptionsBuilder builder) =>
         .ConfigureWarnings(
             _ => _.Throw(QueryComplexityEventId.LimitExceeded));
 ```
-<sup><a href='/src/Tests/Snippets.cs#L70-L78' title='Snippet source file'>snippet source</a> | <a href='#snippet-EscalateWithConfigureWarnings' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Tests/Snippets.cs#L105-L113' title='Snippet source file'>snippet source</a> | <a href='#snippet-EscalateWithConfigureWarnings' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Use `Ignore` instead of `Throw` to silence it.
@@ -222,7 +270,7 @@ protected override void OnConfiguring(DbContextOptionsBuilder builder) =>
                 .Default(WarningBehavior.Throw)
                 .Log(QueryComplexityEventId.LimitExceeded));
 ```
-<sup><a href='/src/Tests/Snippets.cs#L84-L94' title='Snippet source file'>snippet source</a> | <a href='#snippet-KeepLoggingWhenWarningsThrow' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Tests/Snippets.cs#L119-L129' title='Snippet source file'>snippet source</a> | <a href='#snippet-KeepLoggingWhenWarningsThrow' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The message names every level that was exceeded and then prints the query, bounded to 1000 characters. The query that broke a level is the one that prints long, and without a bound every log line reporting it would carry the whole expression tree.
@@ -240,7 +288,7 @@ protected override void OnConfiguring(DbContextOptionsBuilder builder) =>
         .UseSqlServer("connection-string")
         .UseQueryComplexity(sqlServerCostLimit: 300);
 ```
-<sup><a href='/src/Tests/Snippets.cs#L57-L64' title='Snippet source file'>snippet source</a> | <a href='#snippet-SqlServerCostLimit' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Tests/Snippets.cs#L92-L99' title='Snippet source file'>snippet source</a> | <a href='#snippet-SqlServerCostLimit' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 `SET QUERY_GOVERNOR_COST_LIMIT` is applied to every connection as it opens, and SQL Server then refuses any statement whose estimated plan cost is greater than the limit, with error 8649.
