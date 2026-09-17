@@ -86,4 +86,21 @@ public class LoggingTests
 
         await Assert.That(logs.Count).IsEqualTo(0);
     }
+
+    // Some setups, such as EfLocalDb, make every warning throw by default, and a behavior set for
+    // one event takes precedence over that default
+    [Test]
+    public async Task LogOverridesThrowByDefault()
+    {
+        var (context, logs) = ContextBuilder.Build(
+            logAt: Limits.None with {MaxNodes = 1},
+            configure: builder => builder.ConfigureWarnings(
+                _ => _
+                    .Default(WarningBehavior.Throw)
+                    .Log(QueryComplexityEventId.LimitExceeded)));
+
+        context.Employees.Where(_ => _.Salary > 10).ToQueryString();
+
+        await Assert.That(logs.Count).IsEqualTo(1);
+    }
 }

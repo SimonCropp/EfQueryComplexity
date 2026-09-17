@@ -138,7 +138,7 @@ var employees = await context.Employees
     .IgnoreQueryComplexity()
     .ToListAsync();
 ```
-<sup><a href='/src/Tests/Snippets.cs#L87-L94' title='Snippet source file'>snippet source</a> | <a href='#snippet-IgnoreQueryComplexity' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Tests/Snippets.cs#L103-L110' title='Snippet source file'>snippet source</a> | <a href='#snippet-IgnoreQueryComplexity' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Or replace levels for one query:
@@ -156,7 +156,7 @@ var employees = await context.Employees
     .Take(5000)
     .ToListAsync();
 ```
-<sup><a href='/src/Tests/Snippets.cs#L101-L113' title='Snippet source file'>snippet source</a> | <a href='#snippet-WithQueryComplexity' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Tests/Snippets.cs#L117-L129' title='Snippet source file'>snippet source</a> | <a href='#snippet-WithQueryComplexity' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Every level left null keeps the configured value, and a level that is set replaces both the log and the throw level for that check. An override never starts throwing for a context that was not given throw levels. To turn one check off for a query use `int.MaxValue`.
@@ -183,6 +183,22 @@ protected override void OnConfiguring(DbContextOptionsBuilder builder) =>
 <!-- endSnippet -->
 
 Use `Ignore` instead of `Throw` to silence it.
+
+The same configuration can turn the warning into an error without mentioning it. A context whose warnings all throw, such as one built by [EfLocalDb](https://github.com/SimonCropp/LocalDb), which uses `Default(WarningBehavior.Throw)`, throws `InvalidOperationException` for any query over a log level, and the message starts with "An error was generated for warning 'EfQueryComplexity.LimitExceeded'". A behavior set for one event takes precedence over the default, so to keep only logging:
+
+<!-- snippet: KeepLoggingWhenWarningsThrow -->
+<a id='snippet-KeepLoggingWhenWarningsThrow'></a>
+```cs
+protected override void OnConfiguring(DbContextOptionsBuilder builder) =>
+    builder
+        .UseQueryComplexity()
+        .ConfigureWarnings(
+            _ => _
+                .Default(WarningBehavior.Throw)
+                .Log(QueryComplexityEventId.LimitExceeded));
+```
+<sup><a href='/src/Tests/Snippets.cs#L84-L94' title='Snippet source file'>snippet source</a> | <a href='#snippet-KeepLoggingWhenWarningsThrow' title='Start of snippet'>anchor</a></sup>
+<!-- endSnippet -->
 
 The message names every level that was exceeded and then prints the query, bounded to 1000 characters. The query that broke a level is the one that prints long, and without a bound every log line reporting it would carry the whole expression tree.
 

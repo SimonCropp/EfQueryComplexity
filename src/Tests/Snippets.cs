@@ -78,6 +78,22 @@ public class ConfigureWarningsExample :
     #endregion
 }
 
+public class KeepLoggingExample :
+    DbContext
+{
+    #region KeepLoggingWhenWarningsThrow
+
+    protected override void OnConfiguring(DbContextOptionsBuilder builder) =>
+        builder
+            .UseQueryComplexity()
+            .ConfigureWarnings(
+                _ => _
+                    .Default(WarningBehavior.Throw)
+                    .Log(QueryComplexityEventId.LimitExceeded));
+
+    #endregion
+}
+
 public class SnippetExamples
 {
     static async Task Ignore()
