@@ -51,6 +51,22 @@ public class ThrowAtExample :
     #endregion
 }
 
+public class UnboundedOffExample :
+    DbContext
+{
+    #region RejectUnboundedOff
+
+    protected override void OnConfiguring(DbContextOptionsBuilder builder) =>
+        builder.UseQueryComplexity(
+            logAt: QueryComplexityLimits.LogDefaults with
+            {
+                // Every table is small, so a query with no Take is fine
+                RejectUnbounded = false
+            });
+
+    #endregion
+}
+
 public class AllExceptExample :
     DbContext
 {

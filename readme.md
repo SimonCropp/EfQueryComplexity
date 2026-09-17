@@ -144,6 +144,24 @@ The message names the types of the rows returned without a `Take`, and so does `
 
 ### Choosing the types to check
 
+Some apps have no large table at all. An admin or workflow app where every table holds hundreds or thousands of rows can return all of them, and this check only reports queries that are fine. Turn it off, and keep the rest:
+
+<!-- snippet: RejectUnboundedOff -->
+<a id='snippet-RejectUnboundedOff'></a>
+```cs
+protected override void OnConfiguring(DbContextOptionsBuilder builder) =>
+    builder.UseQueryComplexity(
+        logAt: QueryComplexityLimits.LogDefaults with
+        {
+            // Every table is small, so a query with no Take is fine
+            RejectUnbounded = false
+        });
+```
+<sup><a href='/src/Tests/Snippets.cs#L57-L67' title='Snippet source file'>snippet source</a> | <a href='#snippet-RejectUnboundedOff' title='Start of snippet'>anchor</a></sup>
+<!-- endSnippet -->
+
+The other checks are unaffected, so query size, depth, operators, navigations, includes, `Take` counts and `IN` list sizes are still reported. Turn it on again if a table starts growing, and use `Only` to name that table.
+
 Most apps know which tables stay small and which grow. `RejectUnbounded` takes an `UnboundedEntities`, so the check can cover only the types where returning every row is a problem. `true` converts to `UnboundedEntities.All` and `false` to `UnboundedEntities.None`.
 
 Check every type except the ones known to have few rows:
@@ -161,7 +179,7 @@ protected override void OnConfiguring(DbContextOptionsBuilder builder) =>
                 typeof(AccessGroup))
         });
 ```
-<sup><a href='/src/Tests/Snippets.cs#L57-L69' title='Snippet source file'>snippet source</a> | <a href='#snippet-RejectUnboundedAllExcept' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Tests/Snippets.cs#L73-L85' title='Snippet source file'>snippet source</a> | <a href='#snippet-RejectUnboundedAllExcept' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Or check only the types known to have many rows:
@@ -178,7 +196,7 @@ protected override void OnConfiguring(DbContextOptionsBuilder builder) =>
                 typeof(Commitment))
         });
 ```
-<sup><a href='/src/Tests/Snippets.cs#L75-L86' title='Snippet source file'>snippet source</a> | <a href='#snippet-RejectUnboundedOnly' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Tests/Snippets.cs#L91-L102' title='Snippet source file'>snippet source</a> | <a href='#snippet-RejectUnboundedOnly' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 - A query fires when it returns rows of any checked type. A query that joins in a type that is not listed still fires for that type, so both types of a `SelectMany` have to be skipped for it to pass.
@@ -211,7 +229,7 @@ var employees = await context.Employees
     .IgnoreQueryComplexity()
     .ToListAsync();
 ```
-<sup><a href='/src/Tests/Snippets.cs#L138-L145' title='Snippet source file'>snippet source</a> | <a href='#snippet-IgnoreQueryComplexity' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Tests/Snippets.cs#L154-L161' title='Snippet source file'>snippet source</a> | <a href='#snippet-IgnoreQueryComplexity' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Or replace levels for one query:
@@ -229,7 +247,7 @@ var employees = await context.Employees
     .Take(5000)
     .ToListAsync();
 ```
-<sup><a href='/src/Tests/Snippets.cs#L152-L164' title='Snippet source file'>snippet source</a> | <a href='#snippet-WithQueryComplexity' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Tests/Snippets.cs#L168-L180' title='Snippet source file'>snippet source</a> | <a href='#snippet-WithQueryComplexity' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Every level left null keeps the configured value, and a level that is set replaces both the log and the throw level for that check. An override never starts throwing for a context that was not given throw levels. To turn one check off for a query use `int.MaxValue`. `RejectUnbounded` is a `bool` for a query: `true` checks every type and `false` none, whichever types were configured.
@@ -252,7 +270,7 @@ protected override void OnConfiguring(DbContextOptionsBuilder builder) =>
         .ConfigureWarnings(
             _ => _.Throw(QueryComplexityEventId.LimitExceeded));
 ```
-<sup><a href='/src/Tests/Snippets.cs#L105-L113' title='Snippet source file'>snippet source</a> | <a href='#snippet-EscalateWithConfigureWarnings' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Tests/Snippets.cs#L121-L129' title='Snippet source file'>snippet source</a> | <a href='#snippet-EscalateWithConfigureWarnings' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Use `Ignore` instead of `Throw` to silence it.
@@ -270,7 +288,7 @@ protected override void OnConfiguring(DbContextOptionsBuilder builder) =>
                 .Default(WarningBehavior.Throw)
                 .Log(QueryComplexityEventId.LimitExceeded));
 ```
-<sup><a href='/src/Tests/Snippets.cs#L119-L129' title='Snippet source file'>snippet source</a> | <a href='#snippet-KeepLoggingWhenWarningsThrow' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Tests/Snippets.cs#L135-L145' title='Snippet source file'>snippet source</a> | <a href='#snippet-KeepLoggingWhenWarningsThrow' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The message names every level that was exceeded and then prints the query, bounded to 1000 characters. The query that broke a level is the one that prints long, and without a bound every log line reporting it would carry the whole expression tree.
@@ -288,7 +306,7 @@ protected override void OnConfiguring(DbContextOptionsBuilder builder) =>
         .UseSqlServer("connection-string")
         .UseQueryComplexity(sqlServerCostLimit: 300);
 ```
-<sup><a href='/src/Tests/Snippets.cs#L92-L99' title='Snippet source file'>snippet source</a> | <a href='#snippet-SqlServerCostLimit' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Tests/Snippets.cs#L108-L115' title='Snippet source file'>snippet source</a> | <a href='#snippet-SqlServerCostLimit' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 `SET QUERY_GOVERNOR_COST_LIMIT` is applied to every connection as it opens, and SQL Server then refuses any statement whose estimated plan cost is greater than the limit, with error 8649.
