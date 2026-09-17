@@ -10,6 +10,31 @@ Detects overly complex Entity Framework Core queries and either logs them or thr
 Entity Framework has no limits of its own on the size or shape of a query, and the team [closed the request for unbounded result set warnings as not planned](https://github.com/dotnet/efcore/issues/5089). Limits like these usually sit in front of Entity Framework, in an OData or GraphQL layer, and so only cover queries that arrive that way.
 
 
+## Untrusted clients
+
+An API that lets the client shape the query, such as GraphQL or OData, hands part of the query to whoever sends the request. One small request can ask for every row of a table, nest navigations many levels deep, or send a `Contains` list with thousands of values. Each costs the database and the server far more than it costs the client to send, so a handful of them, repeated, is enough to make the API slow or unavailable. This is a denial of service by resource exhaustion, and it needs no bug in the API to work, only a query the API did not expect.
+
+The checks bound what one query can ask for, whichever layer built it:
+
+| Attack | Check |
+| --- | --- |
+| Requesting every row | `RejectUnbounded`, `MaxTake` |
+| Deeply nested or very large queries | `MaxNodes`, `MaxDepth`, `MaxOperators` |
+| Long navigation chains and includes, which multiply joins | `MaxNavigationDepth`, `MaxIncludes`, `MaxIncludeDepth` |
+| Huge `IN` lists | `MaxInValues` |
+| A query that passes every check but is still expensive | [SQL Server cost limit](#sql-server-cost-limit) |
+
+Only throw levels stop a query. Log levels report it and let it run. A practical rollout is to log first, see which levels real clients reach, then set throw levels above that.
+
+These checks limit the cost of each query. They do not replace limits on how often a client can send one, so still use authentication, rate limiting, and request and command timeouts.
+
+Background:
+
+- [OWASP API Security Top 10: API4:2023 Unrestricted Resource Consumption](https://api-security.owasp.org/editions/2023/en/0xa4-unrestricted-resource-consumption)
+- [OWASP GraphQL Cheat Sheet: DoS Prevention](https://cheatsheetseries.owasp.org/cheatsheets/GraphQL_Cheat_Sheet.html#dos-prevention), which covers query depth, amount and cost limits
+- [CWE-770: Allocation of Resources Without Limits or Throttling](https://cwe.mitre.org/data/definitions/770.html)
+
+
 ## NuGet package
 
 https://nuget.org/packages/EfQueryComplexity/
