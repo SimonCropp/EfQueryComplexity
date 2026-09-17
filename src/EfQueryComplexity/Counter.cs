@@ -69,7 +69,7 @@ static class Counter
         // Enumerated as T, so a value type is not boxed
         var enumerated = 0;
 
-        foreach (var item in values)
+        foreach (var unused in values)
         {
             enumerated++;
         }
@@ -81,7 +81,7 @@ static class Counter
     {
         var count = 0;
 
-        foreach (var item in enumerable)
+        foreach (var unused in enumerable)
         {
             count++;
         }

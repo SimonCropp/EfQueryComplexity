@@ -46,18 +46,19 @@ public class CostLimitTests
         await using var database = await AssemblySetup.SqlInstance.Build();
         await using var context = Build(database);
 
+        // ReSharper disable once ReturnValueOfPureMethodIsNotUsed
         context.Companies.Count();
 
-        var exception = Assert.Throws<SqlException>(
-            () => context.Database
-                .SqlQueryRaw<long>(
-                    """
-                    select count_big(*) as Value
-                    from sys.all_columns a
-                      cross join sys.all_columns b
-                      cross join sys.all_columns c
-                    """)
-                .Single());
+        var sqlQueryRaw = context.Database
+            .SqlQueryRaw<long>(
+                """
+                select count_big(*) as Value
+                from sys.all_columns a
+                  cross join sys.all_columns b
+                  cross join sys.all_columns c
+                """);
+        // ReSharper disable once ReturnValueOfPureMethodIsNotUsed
+        var exception = Assert.Throws<SqlException>(() => sqlQueryRaw.Single());
 
         await Assert.That(exception.Number).IsEqualTo(8649);
     }
