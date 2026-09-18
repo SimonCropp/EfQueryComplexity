@@ -1,5 +1,5 @@
 /// <summary>
-/// Counts the values of a Contains list, which arrives as a parameter value.
+/// Counts the values of a list a query sends, which arrives as a parameter value.
 /// </summary>
 static class Counter
 {

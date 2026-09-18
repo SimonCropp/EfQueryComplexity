@@ -46,9 +46,9 @@ The service provider alone is not enough. Entity Framework keys a compiled query
 | `Markers.cs`, `MarkerReader.cs` | The per query marker calls, and reading (`Read`) and removing (`Strip`) them |
 | `ComplexityModelCacheKeyFactory.cs` | Puts the levels in the model cache key, so different levels never share a model, and so never share a compiled query |
 | `ComplexityQueryCompiler.cs` | Wraps the cached delegate so values are checked for every execution, and caches a query that throws |
-| `ValuePlan.cs`, `ValueChecker.cs`, `Counter.cs` | Where Take counts and Contains lists come from, and checking them |
+| `ValuePlan.cs`, `ValueChecker.cs`, `Counter.cs` | Where Take counts and lists of values come from, and checking them |
 | `Violations.cs`, `ComplexityLogger.cs` | Comparing against levels, message text, and logging through EF |
-| `CostLimitInterceptor.cs` | `SET QUERY_GOVERNOR_COST_LIMIT` on every connection open |
+| `CostLimitInterceptor.cs` | `SET QUERY_GOVERNOR_COST_LIMIT` on every connection Entity Framework opens |
 
 ### Two places, because of when values exist
 

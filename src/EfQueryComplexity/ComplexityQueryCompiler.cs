@@ -8,7 +8,7 @@ using Microsoft.EntityFrameworkCore.Query.Internal;
 /// Checks the values a query is executed with, and caches a query that throws.
 /// </summary>
 /// <remarks>
-/// A Take count and a Contains list only exist while a query executes, so they cannot be checked by
+/// A Take count and a list of values only exist while a query executes, so they cannot be checked by
 /// an IQueryExpressionInterceptor, which only runs while a query shape is compiled. CompileQueryCore
 /// returns the delegate Entity Framework caches and then runs for every execution, including for
 /// compiled queries, so wrapping it catches every execution while the query is still only measured

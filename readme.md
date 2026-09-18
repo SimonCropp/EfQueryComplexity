@@ -44,7 +44,7 @@ https://nuget.org/packages/EfQueryComplexity/
 
 - **Two levels per check**: a query is logged at one level and throws at another
 - **Measured once**: shape is measured while a query is compiled, so each distinct query costs it once
-- **Values checked every execution**: `Take` counts and `Contains` lists only exist while a query runs
+- **Values checked every execution**: `Take` counts and the lists a query sends only exist while it runs
 - **Per query overrides**: raise a level for one query, or skip every check for it
 - **Standard logging**: warnings go through the Entity Framework pipeline, so `LogTo`, `ILoggerFactory` and `ConfigureWarnings` all work
 - **SQL Server cost limit**: hand the decision to SQL Server's own query governor
@@ -123,7 +123,7 @@ A query is checked against the throw levels before the log levels, so a throw le
 | `MaxIncludes` | `Include` calls | While compiled | 6 |
 | `MaxIncludeDepth` | Navigations in one `Include` chain | While compiled | 3 |
 | `MaxTake` | The value passed to `Take` | Every execution | 1000 |
-| `MaxInValues` | Values in a `Contains` list | Every execution | 1000 |
+| `MaxInValues` | Values in the largest list the query sends | Every execution | 1000 |
 | `RejectUnbounded` | A query returning rows with no `Take` | While compiled | `All` |
 
 A check fires when the measured value is greater than the level. A level of `null` turns that check off.
@@ -316,6 +316,7 @@ protected override void OnConfiguring(DbContextOptionsBuilder builder) =>
 - The cost is the optimizer's estimate in its own units, not a time, so treat it as relative. It is an estimate, so stale statistics can still let a slow query through.
 - It has to be greater than zero. SQL Server reads a cost limit of zero as the query governor being off, so passing zero throws rather than silently allowing everything.
 - It is applied on every open, because reusing a pooled connection resets session state.
+- Entity Framework has to be the one opening the connection, since that is what the limit is applied by. A connection that was already open when Entity Framework was handed it never gets one, which covers a connection passed to `UseSqlServer` open, and one opened with `context.Database.GetDbConnection().Open()`. Use `context.Database.OpenConnection()`, which Entity Framework performs and so applies the limit to.
 - It is a property of the connection, so `IgnoreQueryComplexity()` does not lift it for one query.
 - SQL Server only, including Azure SQL. Other providers throw.
 

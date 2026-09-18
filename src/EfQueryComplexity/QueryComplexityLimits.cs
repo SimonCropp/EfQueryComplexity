@@ -15,7 +15,7 @@ namespace EfQueryComplexity;
 /// <param name="MaxIncludes">Maximum number of Include calls.</param>
 /// <param name="MaxIncludeDepth">Maximum number of navigations in one Include chain.</param>
 /// <param name="MaxTake">Maximum value passed to Take. Checked on every execution.</param>
-/// <param name="MaxInValues">Maximum number of values in a Contains list. Checked on every execution.</param>
+/// <param name="MaxInValues">Maximum number of values in a list the query sends, such as a Contains list. Checked on every execution.</param>
 /// <param name="RejectUnbounded">
 /// The types for which a query that returns rows without a Take fires. <c>true</c> checks every
 /// type, and <c>false</c> none.

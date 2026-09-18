@@ -50,6 +50,16 @@ public class ShapeTests
                     NavigationDepth))
             .IsEqualTo(3);
 
+    // EF.Property names a navigation as a string, and joins like any other
+    [Test]
+    public async Task NavigationDepthCountsEfProperty() =>
+        await Assert.That(
+                Measure(
+                    context => context.EmployeeTasks.Where(
+                        _ => EF.Property<Company>(EF.Property<Department>(_.Employee, "Department"), "Company").Name == "Acme"),
+                    NavigationDepth))
+            .IsEqualTo(3);
+
     [Test]
     public async Task NavigationDepthIgnoresScalars() =>
         await Assert.That(

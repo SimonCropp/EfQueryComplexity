@@ -35,6 +35,30 @@ public class ValueTests
         Assert.Throws<QueryComplexityException>(() => context.Employees.Take(large).ToQueryString());
     }
 
+    // A compiled query keeps the arithmetic, where an ordinary query has it worked out into one
+    // parameter before the query is compiled
+    [Test]
+    public async Task ComputedTakeInACompiledQuery()
+    {
+        var (context, _) = ContextBuilder.Build(throwAt: Limits.None with {MaxTake = 10});
+        var query = EF.CompileQuery((TestDbContext data, int size) => data.Employees.Take(size * 2));
+
+        var exception = Assert.Throws<QueryComplexityException>(() => query(context, 2500));
+
+        await Assert.That(exception.Violations.Single().Actual).IsEqualTo(5000);
+    }
+
+    // A count worked out from something other than whole numbers is left to the database, and the
+    // query still runs
+    [Test]
+    public void TakeThatCannotBeRead()
+    {
+        var (context, _) = ContextBuilder.Build(throwAt: Limits.None with {MaxTake = 10});
+        var query = EF.CompileQuery((TestDbContext data, long size) => data.Employees.Take((int) size));
+
+        query(context, 5000);
+    }
+
     [Test]
     public async Task TakeInsideSubquery()
     {
@@ -93,6 +117,45 @@ public class ValueTests
             () => context.Employees.Where(_ => new[] {1, 2, 3}.Contains(_.Id)).ToQueryString());
 
         await Assert.That(exception.Violations.Single().Actual).IsEqualTo(3);
+    }
+
+    // Entity Framework sends the whole list whatever the query does with it, so it is counted
+    // wherever it appears rather than only where it is passed to Contains
+    [Test]
+    public async Task AnyOverAList()
+    {
+        var (context, _) = ContextBuilder.Build(throwAt: Limits.None with {MaxInValues = 10});
+        var ids = Enumerable.Range(0, 50).ToList();
+
+        var exception = Assert.Throws<QueryComplexityException>(
+            () => context.Employees.Where(employee => ids.Any(_ => _ == employee.Id)).ToQueryString());
+
+        await Assert.That(exception.Violations.Single().Actual).IsEqualTo(50);
+    }
+
+    [Test]
+    public async Task JoinWithAList()
+    {
+        var (context, _) = ContextBuilder.Build(throwAt: Limits.None with {MaxInValues = 10});
+        var ids = Enumerable.Range(0, 50).ToList();
+
+        var exception = Assert.Throws<QueryComplexityException>(
+            () => context.Employees.Join(ids, _ => _.Id, _ => _, (employee, _) => employee).ToQueryString());
+
+        await Assert.That(exception.Violations.Single().Actual).IsEqualTo(50);
+    }
+
+    // A string and a byte array are each one value, and a subquery is not a list of values at all
+    [Test]
+    public async Task ValueListTypes()
+    {
+        await Assert.That(ValuePlan.IsValueList(typeof(List<int>))).IsTrue();
+        await Assert.That(ValuePlan.IsValueList(typeof(int[]))).IsTrue();
+        await Assert.That(ValuePlan.IsValueList(typeof(HashSet<Guid>))).IsTrue();
+        await Assert.That(ValuePlan.IsValueList(typeof(string))).IsFalse();
+        await Assert.That(ValuePlan.IsValueList(typeof(byte[]))).IsFalse();
+        await Assert.That(ValuePlan.IsValueList(typeof(int))).IsFalse();
+        await Assert.That(ValuePlan.IsValueList(typeof(IQueryable<int>))).IsFalse();
     }
 
     // Neither a collection nor a generic collection, so the values are counted by enumerating them

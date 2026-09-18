@@ -19,6 +19,12 @@ public class MemberTypeTests
         await Assert.That(MeasureNavigationDepth(context => context.Owners.Select(_ => _.Pets.Count())))
             .IsEqualTo(1);
 
+    // A cast is how a chain reaches a navigation on a derived type, so it does not end the chain
+    [Test]
+    public async Task CastInAChainIsCounted() =>
+        await Assert.That(MeasureNavigationDepth(context => context.Pets.Select(_ => ((VipOwner) _.Owner).Assistant!.Name)))
+            .IsEqualTo(2);
+
     static int MeasureNavigationDepth(Func<MemberTypeContext, IQueryable> query)
     {
         // A level of zero fires for any navigation, and the violation reports what the query measures

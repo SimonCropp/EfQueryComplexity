@@ -15,6 +15,11 @@ public class MemberTypeContext(DbContextOptions<MemberTypeContext> options) :
             .WithMany(_ => _.Pets)
             .HasForeignKey(_ => _.OwnerId);
 
+        builder.Entity<VipOwner>()
+            .HasOne(_ => _.Assistant)
+            .WithMany()
+            .HasForeignKey(_ => _.AssistantId);
+
         builder.Entity<Owner>()
             .Property(_ => _.Flags)
             .HasConversion(
@@ -42,6 +47,14 @@ public class Owner
 
     // A collection navigation typed as IEnumerable<T> itself, over a backing field
     public IEnumerable<Pet> Pets => pets;
+}
+
+// A derived type, so that reaching its navigation needs a cast
+public class VipOwner :
+    Owner
+{
+    public int? AssistantId { get; set; }
+    public Owner? Assistant { get; set; }
 }
 
 public class Pet

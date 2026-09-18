@@ -32,7 +32,7 @@ public sealed record QueryComplexityOverride
     /// <summary>Maximum value passed to Take.</summary>
     public int? MaxTake { get; init; }
 
-    /// <summary>Maximum number of values in a Contains list.</summary>
+    /// <summary>Maximum number of values in a list the query sends, such as a Contains list.</summary>
     public int? MaxInValues { get; init; }
 
     /// <summary>

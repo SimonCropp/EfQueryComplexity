@@ -72,6 +72,12 @@ sealed class ShapeAnalyzer(IModel model) :
             }
         }
 
+        // A chain that ends in EF.Property rather than in a member is measured from the call
+        if (IsProperty(node))
+        {
+            Track(ref navigationDepth, NavigationsInChain(node));
+        }
+
         return base.VisitMethodCall(node);
     }
 
@@ -138,23 +144,53 @@ sealed class ShapeAnalyzer(IModel model) :
         }
     }
 
-    int NavigationsInChain(MemberExpression node)
+    int NavigationsInChain(Expression node)
     {
         var count = 0;
-        Expression? current = node;
+        var current = node;
 
-        while (current is MemberExpression member)
+        while (true)
         {
-            if (IsNavigation(member.Member))
+            switch (current)
             {
-                count++;
+                case MemberExpression member:
+                    if (IsNavigation(member.Member))
+                    {
+                        count++;
+                    }
+
+                    current = member.Expression;
+                    continue;
+
+                // A cast is how a chain reaches a navigation on a derived type, so it continues the
+                // chain rather than ending it
+                case UnaryExpression
+                {
+                    NodeType: ExpressionType.Convert or ExpressionType.ConvertChecked or ExpressionType.TypeAs,
+                    Operand: var operand
+                }:
+                    current = operand;
+                    continue;
+
+                // EF.Property names a navigation as a string, and joins like any other
+                case MethodCallExpression call when IsProperty(call):
+                    if (IsNavigation(call.Type))
+                    {
+                        count++;
+                    }
+
+                    current = call.Arguments[0];
+                    continue;
+
+                default:
+                    return count;
             }
-
-            current = member.Expression;
         }
-
-        return count;
     }
+
+    static bool IsProperty(MethodCallExpression call) =>
+        call.Method.DeclaringType == typeof(EF) &&
+        call.Method.Name == nameof(EF.Property);
 
     bool IsNavigation(MemberInfo member)
     {
@@ -165,6 +201,11 @@ sealed class ShapeAnalyzer(IModel model) :
             _ => ((FieldInfo) member).FieldType
         };
 
+        return IsNavigation(type);
+    }
+
+    bool IsNavigation(Type type)
+    {
         if (navigations.TryGetValue(type, out var isNavigation))
         {
             return isNavigation;
