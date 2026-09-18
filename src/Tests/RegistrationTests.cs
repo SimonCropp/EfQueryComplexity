@@ -120,6 +120,31 @@ public class RegistrationTests
         context.Employees.ToQueryString();
     }
 
+    // The levels are part of the model cache key, and another factory in its place would take them
+    // back out, leaving contexts with different levels sharing a model and so a compiled query
+    [Test]
+    public async Task ReplacingTheModelCacheKeyFactoryFirstIsRejected()
+    {
+        var exception = Assert.Throws<InvalidOperationException>(
+            () => new DbContextOptionsBuilder<TestDbContext>()
+                .UseSqlServer("Server=.;Database=Test;")
+                .ReplaceService<IModelCacheKeyFactory, OtherModelCacheKeyFactory>()
+                .UseQueryComplexity());
+
+        await Assert.That(exception.Message).Contains("IModelCacheKeyFactory");
+    }
+
+    // A replacement made afterwards wins, so it is caught as the context is constructed
+    [Test]
+    public async Task ReplacingTheModelCacheKeyFactoryAfterwardsIsRejected()
+    {
+        var exception = Assert.Throws<InvalidOperationException>(
+            () => ContextBuilder.Build(
+                configure: _ => _.ReplaceService<IModelCacheKeyFactory, OtherModelCacheKeyFactory>()));
+
+        await Assert.That(exception.Message).Contains("IModelCacheKeyFactory");
+    }
+
     static ICompiledQueryCache Cache(TestDbContext context) =>
         context.GetService<ICompiledQueryCache>();
 
@@ -128,4 +153,7 @@ public class RegistrationTests
         var (context, _) = ContextBuilder.Build(logAt: logAt, cacheServiceProvider: true);
         return context;
     }
+
+    class OtherModelCacheKeyFactory(ModelCacheKeyFactoryDependencies dependencies) :
+        ModelCacheKeyFactory(dependencies);
 }

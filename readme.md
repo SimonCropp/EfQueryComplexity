@@ -322,12 +322,14 @@ protected override void OnConfiguring(DbContextOptionsBuilder builder) =>
 
 - **Shape** is measured by an `IQueryExpressionInterceptor`, which runs only when a query shape is compiled. Each distinct query is measured once, and logged once. A query that throws does so every time it is used, but the failure is cached in place of the compiled query, so it is not measured again.
 - **Values** are checked by a wrapper around the delegate Entity Framework caches for a query, so every execution is checked, including executions of compiled queries.
-- **Levels are part of the key for Entity Framework's internal service provider**, so contexts with different levels never share a compiled query. Use a few fixed configurations rather than varying levels per request, or Entity Framework's `ManyServiceProvidersCreatedWarning` fires.
+- **Levels are part of the key for Entity Framework's internal service provider, and for its model**, so contexts with different levels never share a compiled query. The service provider alone is not enough: Entity Framework keys a compiled query on the model it was compiled for, and caches both the models and the compiled queries in an `IMemoryCache` that `UseMemoryCache` can hand to more than one provider. Use a few fixed configurations rather than varying levels per request, or Entity Framework's `ManyServiceProvidersCreatedWarning` fires.
 
 
 ## Limitations
 
 - Raw SQL is not analysed. `FromSql`, `ExecuteSql` and `SqlQuery` pass through, and only LINQ composed on top of them is measured.
+- `UseQueryComplexity` replaces `IModelCacheKeyFactory`, so it cannot be used by an application that replaces that itself, for example to give each tenant its own model. It throws rather than quietly dropping either replacement.
+- A context configured with `UseModel`, such as with a compiled model, is given that one model whatever its levels. Regular queries are still kept apart by the internal service provider, but a query compiled by `EF.CompileQuery` is held against the model rather than in that cache, so one shared between contexts configured with different levels is checked against the levels of whichever context compiled it. Give each set of levels its own compiled query.
 - Navigation depth is measured per member access chain, not across separate lambdas.
 - Using `IgnoreQueryComplexity()` or `WithQueryComplexity()` without calling `UseQueryComplexity()` gives Entity Framework's "could not be translated" error, since nothing removes the marker.
 

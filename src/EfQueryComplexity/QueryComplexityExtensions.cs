@@ -61,6 +61,19 @@ public static class QueryComplexityExtensions
             builder.AddInterceptors(costLimitInterceptor);
         }
 
+        // Entity Framework keys a compiled query on the model it was compiled for, so the levels have
+        // to be part of the key for the model cache. Without that, a context sharing an IMemoryCache
+        // with one configured with other levels is handed queries that were checked under those.
+        var factory = ComplexityModelCacheKeyFactory.Replacement(core);
+        if (factory != null &&
+            factory != typeof(ComplexityModelCacheKeyFactory))
+        {
+            throw new InvalidOperationException(
+                $"UseQueryComplexity has to replace IModelCacheKeyFactory, so that contexts with different levels never share a model, and so never share a compiled query that was checked under other levels. It is already replaced with {factory}, and both replacements cannot be in effect. Remove the other one.");
+        }
+
+        builder.ReplaceService<IModelCacheKeyFactory, ComplexityModelCacheKeyFactory>();
+
         // Take and Contains values only exist while a query executes, so they are checked by a query
         // compiler rather than by the interceptor. The same compiler caches a query that throws, so it
         // is also registered whenever a query can throw.

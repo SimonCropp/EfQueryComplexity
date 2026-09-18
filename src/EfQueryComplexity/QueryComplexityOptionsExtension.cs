@@ -25,6 +25,15 @@ sealed class QueryComplexityOptionsExtension(
     // alone, since passing the same levels for both is a reasonable way to say "only throw".
     public void Validate(IDbContextOptions options)
     {
+        // A replacement made after UseQueryComplexity wins, and the levels would then be missing from
+        // the key for the model cache, which is what keeps compiled queries apart
+        var factory = ComplexityModelCacheKeyFactory.Replacement(options.FindExtension<CoreOptionsExtension>());
+        if (factory != typeof(ComplexityModelCacheKeyFactory))
+        {
+            throw new InvalidOperationException(
+                $"IModelCacheKeyFactory is {factory?.ToString() ?? "the Entity Framework default"} rather than the factory UseQueryComplexity registers, which puts the levels into the key for the model cache. Contexts with different levels would share a model, and so share compiled queries that were checked under other levels. Remove that replacement, or call UseQueryComplexity after it.");
+        }
+
         if (ThrowAt == null)
         {
             return;

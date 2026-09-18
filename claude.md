@@ -31,6 +31,8 @@ EfQueryComplexity measures Entity Framework Core queries and, per check, logs a 
 
 Levels come from `UseQueryComplexity(logAt, throwAt, sqlServerCostLimit)` and live in an options extension. All three are part of `GetServiceProviderHashCode` and `ShouldUseSameServiceProvider`, so contexts with different levels never share a compiled query cache and so never reuse a query that was checked under different levels.
 
+The service provider alone is not enough. Entity Framework keys a compiled query on the model it was compiled for, and caches the models and the compiled queries in an `IMemoryCache` that `UseMemoryCache` can hand to several providers. So the log and throw levels are also part of the model cache key, through `ComplexityModelCacheKeyFactory`. `Validate` rejects a context whose `IModelCacheKeyFactory` is not that one.
+
 | File | Purpose |
 | --- | --- |
 | `QueryComplexityExtensions.cs` | Entry point: `UseQueryComplexity`, `IgnoreQueryComplexity`, `WithQueryComplexity` |
@@ -42,6 +44,7 @@ Levels come from `UseQueryComplexity(logAt, throwAt, sqlServerCostLimit)` and li
 | `UnboundedEntities.cs` | Which of those types `RejectUnbounded` checks: `All`, `None`, `AllExcept`, `Only` |
 | `Sequences.cs` | Whether a type is a sequence, and what it holds |
 | `Markers.cs`, `MarkerReader.cs` | The per query marker calls, and reading (`Read`) and removing (`Strip`) them |
+| `ComplexityModelCacheKeyFactory.cs` | Puts the levels in the model cache key, so different levels never share a model, and so never share a compiled query |
 | `ComplexityQueryCompiler.cs` | Wraps the cached delegate so values are checked for every execution, and caches a query that throws |
 | `ValuePlan.cs`, `ValueChecker.cs`, `Counter.cs` | Where Take counts and Contains lists come from, and checking them |
 | `Violations.cs`, `ComplexityLogger.cs` | Comparing against levels, message text, and logging through EF |
