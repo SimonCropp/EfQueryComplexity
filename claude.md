@@ -59,7 +59,7 @@ The service provider alone is not enough. Entity Framework keys a compiled query
 
 ### Markers
 
-`IgnoreQueryComplexity()` and `WithQueryComplexity()` put a call to a method on `Markers` into the query. The override argument is `[NotParameterized]`, which keeps it a constant so it can be read while the query is compiled, and makes it part of the compiled query cache key. `QueryInterceptor` removes the calls with `MarkerReader.Strip`, without which Entity Framework cannot translate the query. `ComplexityQueryCompiler` runs first and only needs what they asked for, so it uses `MarkerReader.Read`, which rebuilds nothing.
+`IgnoreQueryComplexity()` and `WithQueryComplexity()` put a call to a method on `Markers` into the query. A marker is only read from the calls the query itself is built from, which `MarkerReader.Chain` walks. The levels are for the whole query, so a marker on a subquery would change the levels of the query containing it, and `MarkerReader` throws for one rather than honoring it. The override argument is `[NotParameterized]`, which keeps it a constant so it can be read while the query is compiled, and makes it part of the compiled query cache key. `QueryInterceptor` removes the calls with `MarkerReader.Strip`, without which Entity Framework cannot translate the query. `ComplexityQueryCompiler` runs first and only needs what they asked for, so it uses `MarkerReader.Read`, which rebuilds nothing.
 
 ## Testing conventions
 

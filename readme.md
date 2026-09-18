@@ -250,6 +250,8 @@ var employees = await context.Employees
 <sup><a href='/src/Tests/Snippets.cs#L168-L180' title='Snippet source file'>snippet source</a> | <a href='#snippet-WithQueryComplexity' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
+A marker is read from the query being executed, not from a subquery inside it. The levels are for the whole query, so a marker on a queryable that is later used inside another query would change the levels of that whole query, and every query composed over it would skip checks it never asked to skip. One there throws rather than being honored or quietly dropped.
+
 Every level left null keeps the configured value, and a level that is set replaces both the log and the throw level for that check. An override never starts throwing for a context that was not given throw levels. To turn one check off for a query use `int.MaxValue`. `RejectUnbounded` is a `bool` for a query: `true` checks every type and `false` none, whichever types were configured.
 
 `MaxTake` and `MaxInValues` can only be changed for a query when the configured levels set one of them, since the value checks are otherwise not set up at all. An override that sets one anyway throws.

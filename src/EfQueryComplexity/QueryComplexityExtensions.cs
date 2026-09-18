@@ -122,11 +122,15 @@ public static class QueryComplexityExtensions
     /// </summary>
     /// <typeparam name="T">The element type of the query.</typeparam>
     /// <param name="source">The query to skip checks for.</param>
-    public static IQueryable<T> IgnoreQueryComplexity<T>(this IQueryable<T> source) =>
-        source.Provider.CreateQuery<T>(
+    public static IQueryable<T> IgnoreQueryComplexity<T>(this IQueryable<T> source)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+
+        return source.Provider.CreateQuery<T>(
             Expression.Call(
                 Markers.IgnoreMethod.MakeGenericMethod(typeof(T)),
                 source.Expression));
+    }
 
     /// <summary>
     /// Replaces complexity levels for this query.
@@ -134,10 +138,15 @@ public static class QueryComplexityExtensions
     /// <typeparam name="T">The element type of the query.</typeparam>
     /// <param name="source">The query to change levels for.</param>
     /// <param name="limits">The levels to replace. Every level left null keeps the configured value.</param>
-    public static IQueryable<T> WithQueryComplexity<T>(this IQueryable<T> source, QueryComplexityOverride limits) =>
-        source.Provider.CreateQuery<T>(
+    public static IQueryable<T> WithQueryComplexity<T>(this IQueryable<T> source, QueryComplexityOverride limits)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        ArgumentNullException.ThrowIfNull(limits);
+
+        return source.Provider.CreateQuery<T>(
             Expression.Call(
                 Markers.OverrideMethod.MakeGenericMethod(typeof(T)),
                 source.Expression,
                 Expression.Constant(limits)));
+    }
 }

@@ -219,13 +219,91 @@ public class OverrideTests
         await Assert.That(withMarkers).IsEqualTo(plain);
     }
 
+    // The levels are for the whole query, so a marker on a subquery would change the levels of the
+    // query containing it, and every query composed over that subquery would skip its checks
     [Test]
-    public void MarkerInSubqueryIsRemoved()
+    public async Task IgnoreOnASubqueryIsRejected()
+    {
+        var (context, _) = ContextBuilder.Build(throwAt: Limits.None with {RejectUnbounded = true});
+        var lookup = context.Companies.IgnoreQueryComplexity();
+
+        var exception = Assert.Throws<InvalidOperationException>(
+            () => context.Employees
+                .Where(employee => lookup.Any(_ => _.Id == employee.DepartmentId))
+                .ToQueryString());
+
+        await Assert.That(exception.Message).Contains("IgnoreQueryComplexity()");
+    }
+
+    [Test]
+    public async Task OverrideOnASubqueryIsRejected()
+    {
+        var (context, _) = ContextBuilder.Build(throwAt: Limits.None with {RejectUnbounded = true});
+        var lookup = context.Companies
+            .WithQueryComplexity(
+                new()
+                {
+                    RejectUnbounded = false
+                });
+
+        var exception = Assert.Throws<InvalidOperationException>(
+            () => context.Employees
+                .Where(employee => lookup.Any(_ => _.Id == employee.DepartmentId))
+                .ToQueryString());
+
+        await Assert.That(exception.Message).Contains("WithQueryComplexity()");
+    }
+
+    // The levels are read while the query is compiled, and a compiled query parameter only has a
+    // value once the query runs, so it cannot be honored
+    [Test]
+    public async Task OverrideFromACompiledQueryParameterIsRejected()
+    {
+        var (context, _) = ContextBuilder.Build(throwAt: Limits.None with {MaxNodes = 10_000});
+        var query = EF.CompileQuery(
+            (TestDbContext data, QueryComplexityOverride limits) => data.Employees.WithQueryComplexity(limits));
+
+        var exception = Assert.Throws<InvalidOperationException>(
+            () => query(
+                context,
+                new()
+                {
+                    MaxNodes = 1
+                }));
+
+        await Assert.That(exception.Message).Contains("WithQueryComplexity()");
+    }
+
+    // Entity Framework keeps the levels a constant, so the marker is built by hand here
+    [Test]
+    public void OverrideThatIsNotAConstantIsRejected()
+    {
+        var (context, _) = ContextBuilder.Build();
+        var call = Expression.Call(
+            Markers.OverrideMethod.MakeGenericMethod(typeof(Employee)),
+            context.Employees.AsQueryable().Expression,
+            Expression.Parameter(typeof(QueryComplexityOverride)));
+
+        Assert.Throws<InvalidOperationException>(() => MarkerReader.Strip(call));
+    }
+
+    [Test]
+    public void NullOverrideThrows()
     {
         var (context, _) = ContextBuilder.Build();
 
+        Assert.Throws<ArgumentNullException>(() => context.Employees.WithQueryComplexity(null!));
+    }
+
+    // A subquery does not stop a marker on the query being executed from being read
+    [Test]
+    public void MarkerOnAQueryThatHasASubquery()
+    {
+        var (context, _) = ContextBuilder.Build(throwAt: Limits.None with {MaxNodes = 1});
+
         context.Departments
-            .Where(department => context.Employees.IgnoreQueryComplexity().Any(_ => _.DepartmentId == department.Id))
+            .Where(department => context.Employees.Any(_ => _.DepartmentId == department.Id))
+            .IgnoreQueryComplexity()
             .ToQueryString();
     }
 
