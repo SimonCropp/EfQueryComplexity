@@ -82,6 +82,7 @@ On a CPU with efficiency cores, add `--affinity` with a mask of the performance 
 
 - ProjectDefaults signs it with `key.snk`, like `Tests`, and `InternalsVisibleTo` names it, so a benchmark can call an internal type such as `Counter`.
 - Its own `Directory.Build.props` sets `IsPackageProject` to false. ProjectDefaults reads that before the project file and packs every Release project where it is not false, and the publish workflow pushes everything in `nugets`.
+- `DatabaseExecutionBenchmarks` uses EfLocalDb, so needs LocalDB. The readme's "Impact on production performance" numbers come from it and `ExecutionOverheadBenchmarks`, so rerun both and update the tables when the per execution path changes. Run them with `--launchCount 3`, since the error BenchmarkDotNet reports only covers variation within one process, and with nothing else using the CPU: Docker Desktop once used eight cores and made the same code measure 40% slower. Both fix `[InvocationCount]`, since BenchmarkDotNet spreads a one off allocation over the operations it measured, so allocations measured over different counts cannot be compared.
 
 ## Docs are generated
 
@@ -91,8 +92,7 @@ On a CPU with efficiency cores, add `--affinity` with a mask of the performance 
 
 GitHub Actions workflows:
 
-- `.github/workflows/test.yml` builds and tests on every push to main and every PR. Windows only, because the database tests need LocalDB, which it starts explicitly so a missing LocalDB fails as a clear error rather than a timeout. Received snapshots are uploaded as an artifact when a test fails.
-- `.github/workflows/publish-nuget.yml` runs on any tag push. It builds, packs, tests, then pushes to nuget.org with Trusted Publishing (OIDC), so no API key is stored. It needs a one-time trusted publishing policy on nuget.org, scoped to this repo and that workflow file. The version comes from `Version` in `src/Directory.Build.props`, not from the tag, so bump it and tag that commit.
+- `.github/workflows/build.yml` builds and tests on every push to main, every PR and every tag. Windows only, because the database tests need LocalDB, which it starts explicitly so a missing LocalDB fails as a clear error rather than a timeout. Received snapshots are uploaded as an artifact when a test fails. On a tag, the tag is the version (`-p:Version`), and a `publish` job pushes the package to nuget.org with Trusted Publishing (OIDC) through the `nuget` environment, so no API key is stored. The nuget.org policy names this repo and `build.yml`.
 - `.github/workflows/merge-dependabot.yml` follows GitHub's [Dependabot auto-merge tutorial](https://docs.github.com/en/code-security/tutorials/secure-your-dependencies/automate-dependabot-with-actions), and turns on auto-merge (squash) for patch and minor updates. That relies on two repository settings: "Allow auto-merge", and the "Require tests on main" ruleset, which requires the `test` check so auto-merge waits for it.
 - **The ruleset blocks pushes to main by the Actions token.** Repository admins can bypass it, so pushing to main directly still works, but GitHub does not allow the Actions app as a bypass actor on a personal repository. `on-push-do-docs.yml` therefore fails, rather than silently dropping its commit, if it ever has docs changes to push to main.
 
