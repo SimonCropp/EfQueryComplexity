@@ -82,6 +82,7 @@ On a CPU with efficiency cores, add `--affinity` with a mask of the performance 
 
 - ProjectDefaults signs it with `key.snk`, like `Tests`, and `InternalsVisibleTo` names it, so a benchmark can call an internal type such as `Counter`.
 - Its own `Directory.Build.props` sets `IsPackageProject` to false. ProjectDefaults reads that before the project file and packs every Release project where it is not false, and the publish workflow pushes everything in `nugets`.
+- `DatabaseExecutionBenchmarks` uses EfLocalDb, so needs LocalDB. The readme's "Impact on production performance" numbers come from it and `ExecutionOverheadBenchmarks`, so rerun both and update the tables when the per execution path changes. Run them with `--launchCount 3`, since the error BenchmarkDotNet reports only covers variation within one process, and with nothing else using the CPU: Docker Desktop once used eight cores and made the same code measure 40% slower. Both fix `[InvocationCount]`, since BenchmarkDotNet spreads a one off allocation over the operations it measured, so allocations measured over different counts cannot be compared.
 
 ## Docs are generated
 

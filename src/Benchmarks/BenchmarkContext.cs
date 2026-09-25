@@ -3,6 +3,14 @@ public class BenchmarkContext(DbContextOptions<BenchmarkContext> options) :
 {
     public DbSet<Customer> Customers => Set<Customer>();
     public DbSet<Order> Orders => Set<Order>();
+
+    // The query the execution benchmarks run. It has a Take count and a Contains list, so both value
+    // checks run on every execution
+    public IQueryable<Customer> CustomersIn(List<int> ids) =>
+        Customers
+            .Where(_ => ids.Contains(_.Id))
+            .OrderBy(_ => _.Name)
+            .Take(10);
 }
 
 public class Customer

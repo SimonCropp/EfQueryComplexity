@@ -321,6 +321,38 @@ protected override void OnConfiguring(DbContextOptionsBuilder builder) =>
 - SQL Server only, including Azure SQL. Other providers throw.
 
 
+## Impact on production performance
+
+Shape is measured only when a query is compiled, which happens once for each distinct query. After that, each execution pays only for the value checks: reading the `Take` count, and counting each list the query sends, such as a `Contains` list.
+
+Two benchmarks in `src/Benchmarks` run a query that is already compiled, with a `Take` and a 100 value `Contains` list, creating a new context for each execution, as each request does. Every configuration other than the baseline calls `UseQueryComplexity`:
+
+- **Shape checks only**: the log defaults with `MaxTake` and `MaxInValues` off, so nothing is checked on each execution.
+- **Log defaults**: `UseQueryComplexity()`, so the `Take` count and the `Contains` list are checked on each execution.
+- **Log and throw at the defaults**: `UseQueryComplexity(LogDefaults, LogDefaults)`.
+
+`DatabaseExecutionBenchmarks` executes it against LocalDB, so these are the numbers for a whole request, including the round trip and materializing the rows:
+
+| Configuration | Mean | Allocated |
+| --- | ---: | ---: |
+| Baseline (no `UseQueryComplexity`) | 1.079 ms | 252.42 KB |
+| Shape checks only | 1.088 ms (+9 μs) | 252.91 KB (+500 bytes) |
+| Log defaults | 1.081 ms (+2 μs) | 252.87 KB (+460 bytes) |
+| Log and throw at the defaults | 1.080 ms (+1 μs) | 252.87 KB (+460 bytes) |
+
+Each configuration ran in three processes, and against LocalDB the time varied between them by up to 20 μs, more than the checks cost. That is also why shape checks only measures slower than the configurations that do more. So `ExecutionOverheadBenchmarks` measures the cost without a database. It calls `ToQueryString()`, which runs the same cached query and value checks without connecting. It does different work from an execution, so only what each configuration adds is shown, compared with the baseline:
+
+| Configuration | Time added | Memory added |
+| --- | ---: | ---: |
+| Shape checks only | 0.8 μs | 407 bytes |
+| Log defaults | 3.2 μs | 514 bytes |
+| Log and throw at the defaults | 2.9 μs | 514 bytes |
+
+Without a database the processes varied by about 2 μs, and every process that checked values was slower than every process that did not, so a configuration that checks values adds about 3 μs, against a request of about 1.1 ms. Most of the memory comes with creating each context rather than with the value checks, since shape checks only adds nearly as much. Memory is the median of the three processes, since one process sometimes allocated up to about 220 bytes more. Measured on an AMD Ryzen 9 5900X, .NET 10, BenchmarkDotNet 0.15.8.
+
+Compiling a query that has not been seen before costs one extra pass over its expression tree, and that happens once per distinct query.
+
+
 ## How it works
 
 - **Shape** is measured by an `IQueryExpressionInterceptor`, which runs only when a query shape is compiled. Each distinct query is measured once, and logged once. A query that throws does so every time it is used, but the failure is cached in place of the compiled query, so it is not measured again.
