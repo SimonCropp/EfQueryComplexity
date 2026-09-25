@@ -1,3 +1,5 @@
+using Microsoft.EntityFrameworkCore.Query;
+
 public class ValueTests
 {
     [Test]
@@ -299,6 +301,39 @@ public class ValueTests
         await Assert.That(ReplacesQueryCompiler(Limits.None with {MaxTake = 10})).IsTrue();
         await Assert.That(ReplacesQueryCompiler(Limits.None with {MaxInValues = 10})).IsTrue();
         await Assert.That(ReplacesQueryCompiler(Limits.None, Limits.None)).IsTrue();
+    }
+
+    // Check runs for every execution, so one inside its levels allocates nothing. A lambda that
+    // captures a local of Check would allocate its closure on every call, not only when it runs.
+    [Test]
+    public async Task CheckInsideLevelsAllocatesNothing()
+    {
+        var (context, _) = ContextBuilder.Build();
+        var queryContext = context.GetService<IQueryContextFactory>().Create();
+        queryContext.Parameters["take"] = 10;
+        queryContext.Parameters["ids"] = new List<int> {1, 2, 3};
+
+        var query = Expression.Call(
+            typeof(Enumerable),
+            nameof(Enumerable.Take),
+            [typeof(int)],
+            new QueryParameterExpression("ids", typeof(List<int>)),
+            new QueryParameterExpression("take", typeof(int)));
+        var levels = Limits.None with
+        {
+            MaxTake = 100,
+            MaxInValues = 100
+        };
+        var checker = new ValueChecker(ValuePlan.Build(query), levels, levels, query);
+
+        // The first call can allocate while statics are initialized
+        checker.Check(queryContext);
+
+        var before = GC.GetAllocatedBytesForCurrentThread();
+        checker.Check(queryContext);
+        var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+
+        await Assert.That(allocated).IsEqualTo(0);
     }
 
     static bool ReplacesQueryCompiler(QueryComplexityLimits logAt, QueryComplexityLimits? throwAt = null)

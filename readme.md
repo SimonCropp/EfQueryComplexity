@@ -335,20 +335,20 @@ Two benchmarks in `src/Benchmarks` run a query that is already compiled, with a 
 
 | Configuration | Mean | Allocated |
 | --- | ---: | ---: |
-| Baseline (no `UseQueryComplexity`) | 1.079 ms | 252.42 KB |
-| Shape checks only | 1.088 ms (+9 μs) | 252.91 KB (+500 bytes) |
-| Log defaults | 1.081 ms (+2 μs) | 252.87 KB (+460 bytes) |
-| Log and throw at the defaults | 1.080 ms (+1 μs) | 252.87 KB (+460 bytes) |
+| Baseline (no `UseQueryComplexity`) | 1.092 ms | 252.42 KB |
+| Shape checks only | 1.088 ms (-4 μs) | 252.83 KB (+420 bytes) |
+| Log defaults | 1.093 ms (+1 μs) | 252.84 KB (+427 bytes) |
+| Log and throw at the defaults | 1.093 ms (+1 μs) | 252.84 KB (+427 bytes) |
 
-Each configuration ran in three processes, and against LocalDB the time varied between them by up to 20 μs, more than the checks cost. That is also why shape checks only measures slower than the configurations that do more. So `ExecutionOverheadBenchmarks` measures the cost without a database. It calls `ToQueryString()`, which runs the same cached query and value checks without connecting. It does different work from an execution, so only what each configuration adds is shown, compared with the baseline:
+Each configuration ran in three processes, and against LocalDB the time varied between them by up to 22 μs, more than the checks cost. That is also why shape checks only measures faster than the baseline. So `ExecutionOverheadBenchmarks` measures the cost without a database. It calls `ToQueryString()`, which runs the same cached query and value checks without connecting. It does different work from an execution, so only what each configuration adds is shown, compared with the baseline:
 
 | Configuration | Time added | Memory added |
 | --- | ---: | ---: |
-| Shape checks only | 0.8 μs | 407 bytes |
-| Log defaults | 3.2 μs | 514 bytes |
-| Log and throw at the defaults | 2.9 μs | 514 bytes |
+| Shape checks only | 0.3 μs | 407 bytes |
+| Log defaults | -0.1 μs | 415 bytes |
+| Log and throw at the defaults | 1.4 μs | 415 bytes |
 
-Without a database the processes varied by about 2 μs, and every process that checked values was slower than every process that did not, so a configuration that checks values adds about 3 μs, against a request of about 1.1 ms. Most of the memory comes with creating each context rather than with the value checks, since shape checks only adds nearly as much. Memory is the median of the three processes, since one process sometimes allocated up to about 220 bytes more. Measured on an AMD Ryzen 9 5900X, .NET 10, BenchmarkDotNet 0.15.8.
+Without a database the processes varied by about 2.5 μs, and every configuration is within 1.5 μs of the baseline, so the checks add no time that can be measured, against a request of about 1.1 ms. The memory comes with creating each context, most of it what Entity Framework allocates for any options extension and interceptor. The value checks allocate nothing on each execution, and add 8 bytes to shape checks only. Memory is the lowest of the three processes: BenchmarkDotNet counts allocations on every thread, and some processes allocated up to about 290 bytes more, including with `UseQueryComplexity` not called. Measured on an AMD Ryzen 9 5900X, .NET 10, BenchmarkDotNet 0.15.8.
 
 Compiling a query that has not been seen before costs one extra pass over its expression tree, and that happens once per distinct query.
 

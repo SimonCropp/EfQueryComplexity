@@ -43,6 +43,14 @@ sealed class ValueChecker(
             return;
         }
 
+        Log(queryContext, logViolations);
+    }
+
+    // Kept out of Check because the message lambda captures a local, and C# allocates the closure
+    // when entering the scope that declares the local. In Check that would be every execution,
+    // rather than only one that exceeds a log level.
+    void Log(QueryContext queryContext, List<QueryComplexityViolation> logViolations)
+    {
         // Values are checked for every execution, so a hot query would otherwise log the same
         // message endlessly. Each level is logged the first time a compiled query exceeds it.
         var fresh = new List<QueryComplexityViolation>();
