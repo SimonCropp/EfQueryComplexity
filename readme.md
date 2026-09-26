@@ -126,7 +126,7 @@ A query is checked against the throw levels before the log levels, so a throw le
 | `MaxSingleQueryCollections` | Collections one SQL query loads | While compiled | 1 |
 | `MaxTake` | The value passed to `Take` | Every execution | 1000 |
 | `MaxInValues` | Values in the largest list the query sends | Every execution | 1000 |
-| `RejectUnbounded` | A query returning rows with no `Take` | While compiled | `All` |
+| `RejectUnbounded` | A query returning rows with no `Take` or lookup by key | While compiled | `All` |
 
 A check fires when the measured value is greater than the level. A level of `null` turns that check off.
 
@@ -145,21 +145,33 @@ It does not count:
  * Reference navigations.
  * A collection only read by an aggregate, like `_.Employees.Count()` or `_.Employees.Any()`, which is a subquery rather than a join.
  * Any collection in a split query, from `AsSplitQuery()` or `UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery)`, since each collection is then loaded by its own query. `AsSingleQuery()` overrides the default.
+ * An `Include` that Entity Framework ignores, because the query returns no entity for it to load into. A `Select` returning no entity, like `Select(_ => _.Name)` or `Select(_ => new { _.Name })`, or an aggregate like `Count()`, makes Entity Framework ignore the Includes before it. A projection that could return an entity keeps them counted, including one that passes the entity to a method.
 
 The log default of 1 matches the point where Entity Framework logs `MultipleCollectionIncludeWarning`. That warning only covers `Include`, and only when no splitting behavior is configured.
 
 
 ### Unbounded queries
 
-A query is bounded when it cannot return more rows than a `Take` allows:
+A query is bounded when it cannot return more rows than a `Take`, or a [lookup by key](#lookups-by-key), allows:
 
 - A query that returns one row, an aggregate or a count is bounded, so `First`, `Single`, `Count`, `Any`, `Sum` and friends never fire.
-- `Take` bounds everything below it.
-- `SelectMany`, `Join`, `GroupJoin`, `LeftJoin`, `RightJoin` and `Zip` return more rows than their source, so a `Take` below one of them bounds the source rather than the query.
+- `Take` bounds everything below it, and so does a lookup by key.
+- `SelectMany`, `Join`, `GroupJoin`, `LeftJoin`, `RightJoin` and `Zip` return more rows than their source, so a `Take` or a lookup below one of them bounds the source rather than the query.
 - `Concat` and `Union` are bounded only when both sides are.
 - Every other operator returns no more rows than its source.
 
 The message names the types of the rows returned without a `Take`, and so does `QueryComplexityViolation.RowTypes`. A row type is the entity a query reads, not what it projects to, so `Employees.Select(_ => _.Name)` returns `Employee` rows. A query that joins in another sequence returns rows of both types: `Departments.SelectMany(_ => _.Employees)` returns `Department` and `Employee` rows.
+
+
+### Lookups by key
+
+A `Where` that compares the key of its rows with a value, like `Employees.Where(_ => _.Id == id)`, returns at most one row, so it needs no `Take`:
+
+- Other conditions can be added with `&&`. With `||`, each side has to be a lookup.
+- A composite key needs every part compared.
+- The key is the primary key or an alternate key. A unique index does not count: a filter can make it unique among only some of the rows, and a column that allows null can hold null in many rows.
+- `ids.Contains(_.Id)` returns a row for each value in `ids`, so it is only bounded when `MaxInValues` is set, which limits that list. The log and throw levels each decide this with their own `MaxInValues`. For a composite key, one part can be looked up in a list and the rest compared.
+- Only the rows of a `DbSet` can be looked up by their key. Between the `DbSet` and the `Where` there can be filters, ordering, `Skip`, `Take`, `Distinct`, `OfType`, and options such as `Include` and `AsNoTracking`. After a `Select`, a `SelectMany`, a `Join` or a `Concat`, the same key can be in many rows, as it can in the rows `FromSql` returns.
 
 
 ### Choosing the types to check

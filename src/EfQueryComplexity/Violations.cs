@@ -14,7 +14,10 @@ static class Violations
         Add(violations, nameof(QueryComplexityLimits.MaxIncludeDepth), limits.MaxIncludeDepth, shape.IncludeDepth);
         Add(violations, nameof(QueryComplexityLimits.MaxSingleQueryCollections), limits.MaxSingleQueryCollections, shape.SingleQueryCollections);
 
-        var rowTypes = CheckedTypes(shape.UnboundedTypes, limits.RejectUnbounded);
+        // A key looked up in a list returns a row for each value in it, so only bounds the query when
+        // MaxInValues limits the list
+        var unboundedTypes = limits.MaxInValues == null ? shape.UnboundedTypes : shape.UnboundedTypesWhenListsLimited;
+        var rowTypes = CheckedTypes(unboundedTypes, limits.RejectUnbounded);
         if (rowTypes != null)
         {
             violations.Add(

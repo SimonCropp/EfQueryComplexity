@@ -45,16 +45,34 @@ public class UnboundedTests
     public Task ConcatWithUnbounded() =>
         AssertUnbounded(context => context.Employees.Take(5).Concat(context.Employees));
 
+    // A lookup by key returns at most one row. KeyLookupTests covers which lookups count.
+    [Test]
+    public Task KeyLookupWithInclude()
+    {
+        var id = 1;
+        return AssertBounded(context => context.Companies.Where(_ => _.Id == id).Include(_ => _.Departments));
+    }
+
+    // The lookup bounds the departments, not the employees each has
+    [Test]
+    public Task KeyLookupThenSelectMany()
+    {
+        var id = 1;
+        return AssertRowTypes(
+            context => context.Departments.Where(_ => _.Id == id).SelectMany(_ => _.Employees),
+            "Employee");
+    }
+
     [Test]
     public async Task ScalarTerminalsAreBounded()
     {
         var (context, _) = ContextBuilder.Build();
         var employees = context.Employees;
 
-        await Assert.That(UnboundedDetector.Find(Terminal(employees, nameof(Queryable.Count)))).IsEmpty();
-        await Assert.That(UnboundedDetector.Find(Terminal(employees, nameof(Queryable.First)))).IsEmpty();
-        await Assert.That(UnboundedDetector.Find(Terminal(employees, nameof(Queryable.Any)))).IsEmpty();
-        await Assert.That(UnboundedDetector.Find(Terminal(employees, nameof(Queryable.LongCount)))).IsEmpty();
+        await Assert.That(UnboundedDetector.Find(Terminal(employees, nameof(Queryable.Count)), listsLimited: false)).IsEmpty();
+        await Assert.That(UnboundedDetector.Find(Terminal(employees, nameof(Queryable.First)), listsLimited: false)).IsEmpty();
+        await Assert.That(UnboundedDetector.Find(Terminal(employees, nameof(Queryable.Any)), listsLimited: false)).IsEmpty();
+        await Assert.That(UnboundedDetector.Find(Terminal(employees, nameof(Queryable.LongCount)), listsLimited: false)).IsEmpty();
     }
 
     // A projection does not change which rows are read

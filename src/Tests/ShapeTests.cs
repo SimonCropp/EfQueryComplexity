@@ -261,6 +261,102 @@
                 .ThenInclude(_ => _.Employees),
             SplitByDefault);
 
+    // The query returns names, so there are no companies for the Includes to load into
+    [Test]
+    public Task SingleQueryCollectionsIgnoresIncludesAProjectionDrops() =>
+        AssertNoCollections(
+            context => context.Companies
+                .Include(_ => _.Departments)
+                .ThenInclude(_ => _.Employees)
+                .Where(_ => _.Name != "")
+                .OrderBy(_ => _.Name)
+                .Take(5)
+                .Select(_ => _.Name));
+
+    [Test]
+    public Task SingleQueryCollectionsIgnoresIncludesADtoDrops() =>
+        AssertNoCollections(
+            context => context.Companies
+                .Include(_ => _.Departments)
+                .ThenInclude(_ => _.Employees)
+                .Select(
+                    _ => new
+                    {
+                        _.Name,
+                        Departments = _.Departments.Count(),
+                        Staffed = _.Departments.Any(department => department.Employees.Count > 0)
+                    }));
+
+    [Test]
+    public async Task SingleQueryCollectionsIgnoresIncludesAnAggregateDrops()
+    {
+        var (context, _) = ContextBuilder.Build();
+        var query = context.Companies
+            .Include(_ => _.Departments)
+            .ThenInclude(_ => _.Employees);
+        var count = Expression.Call(typeof(Queryable), nameof(Queryable.Count), [typeof(Company)], query.Expression);
+
+        await Assert.That(CollectionCounter.Count(count, context.Model, splitByDefault: false)).IsEqualTo(0);
+    }
+
+    // The projection loads the department names itself, and the Include is ignored
+    [Test]
+    public async Task SingleQueryCollectionsCountsProjectionNotDroppedInclude() =>
+        await Assert.That(
+                Measure(
+                    context => context.Companies
+                        .Include(_ => _.Departments)
+                        .Select(
+                            _ => new
+                            {
+                                _.Name,
+                                Departments = _.Departments.Select(department => department.Name).ToList()
+                            }),
+                    SingleQueryCollections))
+            .IsEqualTo(1);
+
+    [Test]
+    public async Task SingleQueryCollectionsCountsIncludesOfAProjectedEntity() =>
+        await Assert.That(
+                Measure(
+                    context => context.Companies
+                        .Include(_ => _.Departments)
+                        .ThenInclude(_ => _.Employees)
+                        .Select(
+                            _ => new
+                            {
+                                Company = _
+                            }),
+                    SingleQueryCollections))
+            .IsEqualTo(2);
+
+    // Entity Framework carries the ThenInclude onto the department the projection returns
+    [Test]
+    public async Task SingleQueryCollectionsCountsIncludesOfAProjectedNavigation() =>
+        await Assert.That(
+                Measure(
+                    context => context.Employees
+                        .Include(_ => _.Department)
+                        .ThenInclude(_ => _.Employees)
+                        .Select(_ => _.Department),
+                    SingleQueryCollections))
+            .IsEqualTo(1);
+
+    // The method runs after the company is loaded with its Includes
+    [Test]
+    public async Task SingleQueryCollectionsCountsIncludesOfAnEntityPassedToAMethod() =>
+        await Assert.That(
+                Measure(
+                    context => context.Companies
+                        .Include(_ => _.Departments)
+                        .ThenInclude(_ => _.Employees)
+                        .Select(_ => Describe(_)),
+                    SingleQueryCollections))
+            .IsEqualTo(2);
+
+    static string Describe(Company company) =>
+        company.Name;
+
     static void SplitByDefault(DbContextOptionsBuilder<TestDbContext> builder) =>
         builder.UseSqlServer(
             "Server=.;Database=Test;",

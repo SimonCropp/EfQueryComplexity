@@ -9,4 +9,5 @@ readonly record struct QueryShape(
     int Includes,
     int IncludeDepth,
     int SingleQueryCollections,
-    IReadOnlyList<Type> UnboundedTypes);
+    IReadOnlyList<Type> UnboundedTypes,
+    IReadOnlyList<Type> UnboundedTypesWhenListsLimited);

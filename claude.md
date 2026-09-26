@@ -40,8 +40,10 @@ The service provider alone is not enough. Entity Framework keys a compiled query
 | `QueryComplexityOptionsExtension.cs` | Holds the levels, and keys the internal service provider |
 | `QueryInterceptor.cs` | `IQueryExpressionInterceptor`: measures shape and strips markers, once per compiled shape |
 | `ShapeAnalyzer.cs` | One pass measuring nodes, depth, operators, navigations and includes |
-| `CollectionCounter.cs` | The collections one SQL query loads, through collection includes and projections. A split query counts none |
-| `UnboundedDetector.cs` | The types of the rows a query can return without a limit, found once per compiled shape |
+| `CollectionCounter.cs` | The collections one SQL query loads, through collection includes and projections. A split query counts none, and nor does an Include that Entity Framework ignores, because the query returns no entity for it to load into |
+| `UnboundedDetector.cs` | The types of the rows a query can return without a limit, found once per compiled shape, with lists limited and without |
+| `KeyLookup.cs` | Whether a `Where` looks its rows up by primary or alternate key, which bounds it like a `Take`. A key in a list is only bounded when `MaxInValues` is set |
+| `RowOperators.cs` | The operators that return some of their source's rows, unchanged: the ones allowed between a `DbSet` and a lookup by key, and between an ignored Include and what ignores it |
 | `UnboundedEntities.cs` | Which of those types `RejectUnbounded` checks: `All`, `None`, `AllExcept`, `Only` |
 | `Sequences.cs` | Whether a type is a sequence, and what it holds |
 | `Markers.cs`, `MarkerReader.cs` | The per query marker calls, and reading (`Read`) and removing (`Strip`) them |
