@@ -39,8 +39,8 @@ public sealed record QueryComplexityOverride
     public int? MaxInValues { get; init; }
 
     /// <summary>
-    /// Whether a query that returns rows without a Take fires. <c>true</c> checks every type, and
-    /// <c>false</c> none, whichever types the configured levels name.
+    /// Whether a query that returns rows without a Take, or a lookup by key, fires. <c>true</c> checks
+    /// every type, and <c>false</c> none, whichever types the configured levels name.
     /// </summary>
     public bool? RejectUnbounded { get; init; }
 

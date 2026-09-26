@@ -4,11 +4,11 @@ namespace EfQueryComplexity;
 /// The types RejectUnbounded checks.
 /// </summary>
 /// <remarks>
-/// A query fires when it returns rows of a checked type without a Take. Naming a type also names
-/// the types derived from it, and naming an interface names the types that implement it. Rows that
-/// are not entities, such as a list of values, are checked by <see cref="All" /> and
-/// <see cref="AllExcept" />, and not by <see cref="Only" />. <c>true</c> converts to
-/// <see cref="All" />, and <c>false</c> to <see cref="None" />.
+/// A query fires when it returns rows of a checked type without a Take, or a lookup by key. Naming a
+/// type also names the types derived from it, and naming an interface names the types that
+/// implement it. Rows that are not entities, such as a list of values, are checked by
+/// <see cref="All" /> and <see cref="AllExcept" />, and not by <see cref="Only" />. <c>true</c>
+/// converts to <see cref="All" />, and <c>false</c> to <see cref="None" />.
 /// </remarks>
 public sealed class UnboundedEntities :
     IEquatable<UnboundedEntities>

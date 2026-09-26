@@ -21,8 +21,9 @@
 /// <param name="MaxTake">Maximum value passed to Take. Checked on every execution.</param>
 /// <param name="MaxInValues">Maximum number of values in a list the query sends, such as a Contains list. Checked on every execution.</param>
 /// <param name="RejectUnbounded">
-/// The types for which a query that returns rows without a Take fires. <c>true</c> checks every
-/// type, and <c>false</c> none.
+/// The types for which a query that returns rows without a Take, or a lookup by key, fires.
+/// <c>true</c> checks every type, and <c>false</c> none. A key looked up in a list, as in
+/// <c>ids.Contains(_.Id)</c>, is only a limit when MaxInValues is set.
 /// </param>
 public sealed record QueryComplexityLimits(
     int? MaxNodes,

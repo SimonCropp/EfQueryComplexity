@@ -6,7 +6,8 @@
 /// A single query joins every collection it loads, so each multiplies the rows returned for the
 /// others, a cartesian explosion. A split query loads each collection in its own query, so counts
 /// none. A collection only read by an aggregate, like <c>_.Employees.Count()</c>, is a subquery rather
-/// than a join, so is not counted.
+/// than a join, so is not counted. Nor is an Include that Entity Framework ignores, since the query
+/// returns no entity for it to load into.
 /// </remarks>
 sealed class CollectionCounter(IModel model) :
     ExpressionVisitor
@@ -14,6 +15,7 @@ sealed class CollectionCounter(IModel model) :
     // Keyed on the full path from the root, so an Include chain that restates a collection, to
     // ThenInclude something else below it, counts that collection once
     HashSet<string> includePaths = [];
+    HashSet<MethodCallExpression> ignoredIncludes = [];
     int projected;
 
     public static int Count(Expression query, IModel model, bool splitByDefault)
@@ -56,22 +58,99 @@ sealed class CollectionCounter(IModel model) :
         var method = node.Method;
         var declaringType = method.DeclaringType;
 
-        if (declaringType == typeof(EntityFrameworkQueryableExtensions) &&
-            method.Name is "Include" or "ThenInclude")
+        if (IsInclude(method))
         {
-            AddIncludePaths(node);
+            if (!ignoredIncludes.Contains(node))
+            {
+                AddIncludePaths(node);
+            }
+
             return base.VisitMethodCall(node);
         }
 
-        if ((declaringType == typeof(Queryable) || declaringType == typeof(Enumerable)) &&
-            method.Name == "Select")
+        if (declaringType != typeof(Queryable) &&
+            declaringType != typeof(Enumerable))
         {
+            return base.VisitMethodCall(node);
+        }
+
+        if (method.Name == "Select")
+        {
+            var selector = node.Arguments[1];
+            if (!ReturnsEntities(selector))
+            {
+                IgnoreIncludes(node.Arguments[0]);
+            }
+
             Visit(node.Arguments[0]);
-            new ProjectionCounter(this).Visit(node.Arguments[1]);
+            new ProjectionCounter(this).Visit(selector);
             return node;
         }
 
+        // An aggregate, like Count or Any, returns a value rather than entities
+        if (node.Arguments is [var source, ..] &&
+            !Sequences.IsSequence(node.Type) &&
+            !HoldsEntities(node.Type))
+        {
+            IgnoreIncludes(source);
+        }
+
         return base.VisitMethodCall(node);
+    }
+
+    static bool IsInclude(MethodInfo method) =>
+        method.DeclaringType == typeof(EntityFrameworkQueryableExtensions) &&
+        method.Name is "Include" or "ThenInclude";
+
+    // An Include only loads into the entities a query returns, so Entity Framework ignores the ones
+    // before an operator that returns none. Walking stops at an operator that changes the rows, since
+    // an Include below it can load into what that operator returns.
+    void IgnoreIncludes(Expression source)
+    {
+        var current = source;
+        while (current is MethodCallExpression call &&
+               RowOperators.KeepsRows(call.Method))
+        {
+            if (IsInclude(call.Method))
+            {
+                ignoredIncludes.Add(call);
+            }
+
+            current = call.Arguments[0];
+        }
+    }
+
+    bool ReturnsEntities(Expression selector)
+    {
+        // Queryable takes the selector as an expression, and Enumerable, inside a lambda, as a delegate
+        if (selector is UnaryExpression {NodeType: ExpressionType.Quote} quote)
+        {
+            selector = quote.Operand;
+        }
+
+        // A method group cannot be looked into, so it could return anything
+        if (selector is not LambdaExpression lambda)
+        {
+            return true;
+        }
+
+        var finder = new EntityFinder(this);
+        finder.Visit(lambda.Body);
+        return finder.Found;
+    }
+
+    // Whether a value is, or holds, entities. A shared type counts, since any entity could use it.
+    bool HoldsEntities(Type type)
+    {
+        var element = Sequences.ElementType(type);
+        if (element.IsValueType ||
+            element == typeof(string))
+        {
+            return false;
+        }
+
+        return model.IsShared(element) ||
+               model.FindEntityType(element) != null;
     }
 
     void AddIncludePaths(MethodCallExpression node)
@@ -293,6 +372,97 @@ sealed class CollectionCounter(IModel model) :
 
                 current = call.Arguments[0];
             }
+        }
+    }
+
+    /// <summary>
+    /// Finds an entity a projection can return, which the Includes before it would load into.
+    /// </summary>
+    /// <remarks>
+    /// An entity is not returned when a member is read from it, when it is compared, or when a LINQ
+    /// operator reads it. What those return is checked where it is used. An entity anywhere else,
+    /// such as in a constructor or passed to a method, could be returned.
+    /// </remarks>
+    sealed class EntityFinder(CollectionCounter counter) :
+        ExpressionVisitor
+    {
+        public bool Found { get; private set; }
+
+        public override Expression? Visit(Expression? node)
+        {
+            if (node != null &&
+                counter.HoldsEntities(node.Type))
+            {
+                Found = true;
+                return node;
+            }
+
+            return base.Visit(node);
+        }
+
+        // The parameters are rows coming in, not what the lambda returns
+        protected override Expression VisitLambda<T>(Expression<T> node)
+        {
+            Visit(node.Body);
+            return node;
+        }
+
+        protected override Expression VisitMember(MemberExpression node)
+        {
+            if (node.Expression != null)
+            {
+                Read(node.Expression);
+            }
+
+            return node;
+        }
+
+        protected override Expression VisitBinary(BinaryExpression node)
+        {
+            if (node.NodeType is ExpressionType.Equal or ExpressionType.NotEqual)
+            {
+                Read(node.Left);
+                Read(node.Right);
+                return node;
+            }
+
+            return base.VisitBinary(node);
+        }
+
+        // A LINQ operator, or EF.Property, reads its source rather than returning it
+        protected override Expression VisitMethodCall(MethodCallExpression node)
+        {
+            var declaringType = node.Method.DeclaringType;
+            if (node.Arguments is [var source, ..] &&
+                (declaringType == typeof(Queryable) ||
+                 declaringType == typeof(Enumerable) ||
+                 ShapeAnalyzer.IsProperty(node)))
+            {
+                Read(source);
+                foreach (var argument in node.Arguments.Skip(1))
+                {
+                    Visit(argument);
+                }
+
+                return node;
+            }
+
+            return base.VisitMethodCall(node);
+        }
+
+        // Looks into a value that is read rather than returned. A cast, such as the one reaching a
+        // member of a derived type, is read along with it.
+        void Read(Expression value)
+        {
+            while (value is UnaryExpression
+                   {
+                       NodeType: ExpressionType.Convert or ExpressionType.ConvertChecked or ExpressionType.TypeAs
+                   } cast)
+            {
+                value = cast.Operand;
+            }
+
+            base.Visit(value);
         }
     }
 }

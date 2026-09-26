@@ -3,11 +3,17 @@
 /// </summary>
 /// <remarks>
 /// Whether a query is unbounded for a set of levels is whether those levels check any of these types.
-/// So they are found once for each compiled query, rather than once for each set of levels.
+/// So they are found once for each compiled query, with lists limited and without, rather than once
+/// for each set of levels.
 /// </remarks>
 static class UnboundedDetector
 {
-    public static IReadOnlyList<Type> Find(Expression query)
+    /// <param name="query">The query to walk.</param>
+    /// <param name="listsLimited">
+    /// Whether the size of a list the query sends is limited, so a key looked up in a list bounds the
+    /// rows.
+    /// </param>
+    public static IReadOnlyList<Type> Find(Expression query, bool listsLimited)
     {
         // A query that does not return a sequence returns one row, an aggregate, or a row count
         if (!typeof(IQueryable).IsAssignableFrom(query.Type))
@@ -16,14 +22,14 @@ static class UnboundedDetector
         }
 
         var types = new List<Type>();
-        Collect(query, types, takeBounds: true);
+        Collect(query, types, takeBounds: true, listsLimited);
         return types;
     }
 
     // Walks from the outermost operator towards the source, adding the row type of every source that
-    // no Take limits. A sequence that is joined in is walked with takeBounds false, since the operator
-    // joining it returns more rows than its source whatever limits that sequence.
-    static void Collect(Expression expression, List<Type> types, bool takeBounds)
+    // no Take or lookup by key limits. A sequence that is joined in is walked with takeBounds false,
+    // since the operator joining it returns more rows than its source whatever limits that sequence.
+    static void Collect(Expression expression, List<Type> types, bool takeBounds, bool listsLimited)
     {
         while (true)
         {
@@ -57,11 +63,21 @@ static class UnboundedDetector
 
                         break;
 
+                    // A lookup by key returns at most one row for each value, so bounds like a Take
+                    case "Where":
+                        if (takeBounds &&
+                            KeyLookup.Bounds(call, listsLimited))
+                        {
+                            return;
+                        }
+
+                        break;
+
                     // These return more rows than their source, so a Take below one of them bounds the
                     // source rather than the query
                     case "SelectMany":
-                        Collect(source, types, takeBounds);
-                        CollectSelected(call, types);
+                        Collect(source, types, takeBounds, listsLimited);
+                        CollectSelected(call, types, listsLimited);
                         return;
 
                     case "Join":
@@ -69,15 +85,15 @@ static class UnboundedDetector
                     case "LeftJoin":
                     case "RightJoin":
                     case "Zip":
-                        Collect(source, types, takeBounds);
-                        CollectJoined(call, types);
+                        Collect(source, types, takeBounds, listsLimited);
+                        CollectJoined(call, types, listsLimited);
                         return;
 
                     case "Concat":
                     case "Union":
                     case "UnionBy":
-                        Collect(source, types, takeBounds);
-                        Collect(call.Arguments[1], types, takeBounds);
+                        Collect(source, types, takeBounds, listsLimited);
+                        Collect(call.Arguments[1], types, takeBounds, listsLimited);
                         return;
                 }
             }
@@ -88,7 +104,7 @@ static class UnboundedDetector
     }
 
     // The rows a SelectMany joins in are the ones its collection selector returns
-    static void CollectSelected(MethodCallExpression call, List<Type> types)
+    static void CollectSelected(MethodCallExpression call, List<Type> types, bool listsLimited)
     {
         var selector = call.Arguments[1];
 
@@ -100,7 +116,7 @@ static class UnboundedDetector
 
         if (selector is LambdaExpression lambda)
         {
-            Collect(lambda.Body, types, takeBounds: false);
+            Collect(lambda.Body, types, takeBounds: false, listsLimited);
             return;
         }
 
@@ -111,7 +127,7 @@ static class UnboundedDetector
 
     // Join, GroupJoin, LeftJoin and RightJoin take one other sequence, and Zip one or two. Selectors
     // and comparers are not sequences.
-    static void CollectJoined(MethodCallExpression call, List<Type> types)
+    static void CollectJoined(MethodCallExpression call, List<Type> types, bool listsLimited)
     {
         var arguments = call.Arguments;
         for (var index = 1; index < arguments.Count; index++)
@@ -119,7 +135,7 @@ static class UnboundedDetector
             var argument = arguments[index];
             if (Sequences.IsSequence(argument.Type))
             {
-                Collect(argument, types, takeBounds: false);
+                Collect(argument, types, takeBounds: false, listsLimited);
             }
         }
     }

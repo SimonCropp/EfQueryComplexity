@@ -27,7 +27,8 @@ sealed class ShapeAnalyzer(IModel model) :
             analyzer.includes,
             analyzer.includeDepth,
             CollectionCounter.Count(query, model, splitByDefault),
-            UnboundedDetector.Find(query));
+            UnboundedDetector.Find(query, listsLimited: false),
+            UnboundedDetector.Find(query, listsLimited: true));
     }
 
     public override Expression? Visit(Expression? node)
@@ -189,7 +190,7 @@ sealed class ShapeAnalyzer(IModel model) :
         }
     }
 
-    static bool IsProperty(MethodCallExpression call) =>
+    public static bool IsProperty(MethodCallExpression call) =>
         call.Method.DeclaringType == typeof(EF) &&
         call.Method.Name == nameof(EF.Property);
 
