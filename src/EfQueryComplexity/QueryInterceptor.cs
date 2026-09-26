@@ -1,4 +1,4 @@
-/// <summary>
+﻿/// <summary>
 /// Measures a query and removes the marker calls, while the query is compiled.
 /// </summary>
 /// <remarks>
@@ -47,7 +47,7 @@ sealed class QueryInterceptor :
             return stripped;
         }
 
-        var shape = ShapeAnalyzer.Analyze(stripped, context.Model);
+        var shape = ShapeAnalyzer.Analyze(stripped, context.Model, SplitByDefault(context));
 
         if (throwAt != null)
         {
@@ -70,4 +70,12 @@ sealed class QueryInterceptor :
 
         return stripped;
     }
+
+    // UseQuerySplittingBehavior on the provider, for example UseSqlServer(_ => _.UseQuerySplittingBehavior(...))
+    static bool SplitByDefault(DbContext context) =>
+        context.GetService<IDbContextOptions>()
+            .Extensions
+            .OfType<RelationalOptionsExtension>()
+            .FirstOrDefault()
+            ?.QuerySplittingBehavior == QuerySplittingBehavior.SplitQuery;
 }

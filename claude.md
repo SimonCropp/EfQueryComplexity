@@ -1,4 +1,4 @@
-# CLAUDE.md
+﻿# CLAUDE.md
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
@@ -40,6 +40,7 @@ The service provider alone is not enough. Entity Framework keys a compiled query
 | `QueryComplexityOptionsExtension.cs` | Holds the levels, and keys the internal service provider |
 | `QueryInterceptor.cs` | `IQueryExpressionInterceptor`: measures shape and strips markers, once per compiled shape |
 | `ShapeAnalyzer.cs` | One pass measuring nodes, depth, operators, navigations and includes |
+| `CollectionCounter.cs` | The collections one SQL query loads, through collection includes and projections. A split query counts none |
 | `UnboundedDetector.cs` | The types of the rows a query can return without a limit, found once per compiled shape |
 | `UnboundedEntities.cs` | Which of those types `RejectUnbounded` checks: `All`, `None`, `AllExcept`, `Only` |
 | `Sequences.cs` | Whether a type is a sequence, and what it holds |

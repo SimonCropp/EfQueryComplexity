@@ -1,4 +1,4 @@
-namespace EfQueryComplexity;
+﻿namespace EfQueryComplexity;
 
 /// <summary>
 /// A set of complexity levels for a query.
@@ -14,6 +14,10 @@ namespace EfQueryComplexity;
 /// <param name="MaxNavigationDepth">Maximum number of navigations in one member access chain.</param>
 /// <param name="MaxIncludes">Maximum number of Include calls.</param>
 /// <param name="MaxIncludeDepth">Maximum number of navigations in one Include chain.</param>
+/// <param name="MaxSingleQueryCollections">
+/// Maximum number of collections one SQL query loads, through collection Includes and collections in
+/// a projection. Each multiplies the rows returned for the others. A split query counts none.
+/// </param>
 /// <param name="MaxTake">Maximum value passed to Take. Checked on every execution.</param>
 /// <param name="MaxInValues">Maximum number of values in a list the query sends, such as a Contains list. Checked on every execution.</param>
 /// <param name="RejectUnbounded">
@@ -29,7 +33,8 @@ public sealed record QueryComplexityLimits(
     int? MaxIncludeDepth,
     int? MaxTake,
     int? MaxInValues,
-    UnboundedEntities? RejectUnbounded)
+    UnboundedEntities? RejectUnbounded,
+    int? MaxSingleQueryCollections = null)
 {
     /// <summary>
     /// The levels used for logging when none are passed to UseQueryComplexity.
@@ -47,7 +52,8 @@ public sealed record QueryComplexityLimits(
         MaxIncludeDepth: 3,
         MaxTake: 1000,
         MaxInValues: 1000,
-        RejectUnbounded: UnboundedEntities.All);
+        RejectUnbounded: UnboundedEntities.All,
+        MaxSingleQueryCollections: 1);
 
     // Measured while a query is compiled
     internal bool HasShapeLevels =>
@@ -57,6 +63,7 @@ public sealed record QueryComplexityLimits(
         MaxNavigationDepth != null ||
         MaxIncludes != null ||
         MaxIncludeDepth != null ||
+        MaxSingleQueryCollections != null ||
         RejectUnbounded is {IsNone: false};
 
     // Measured on every execution, since the values only exist then
@@ -80,6 +87,7 @@ public sealed record QueryComplexityLimits(
             @override.MaxIncludeDepth ?? MaxIncludeDepth,
             @override.MaxTake ?? MaxTake,
             @override.MaxInValues ?? MaxInValues,
-            @override.RejectUnbounded ?? RejectUnbounded);
+            @override.RejectUnbounded ?? RejectUnbounded,
+            @override.MaxSingleQueryCollections ?? MaxSingleQueryCollections);
     }
 }

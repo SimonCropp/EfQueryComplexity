@@ -1,4 +1,4 @@
-public class ShapeTests
+﻿public class ShapeTests
 {
     static QueryComplexityLimits Nodes(QueryComplexityLimits limits, int value) =>
         limits with {MaxNodes = value};
@@ -17,6 +17,9 @@ public class ShapeTests
 
     static QueryComplexityLimits IncludeDepth(QueryComplexityLimits limits, int value) =>
         limits with {MaxIncludeDepth = value};
+
+    static QueryComplexityLimits SingleQueryCollections(QueryComplexityLimits limits, int value) =>
+        limits with {MaxSingleQueryCollections = value};
 
     [Test]
     public Task NodeLevel() =>
@@ -165,6 +168,113 @@ public class ShapeTests
         context.Employees.Where(_ => _.Salary > 10).ToQueryString();
 
         await Assert.That(logs.Count).IsEqualTo(1);
+    }
+
+    [Test]
+    public Task SingleQueryCollectionsLevel() =>
+        AssertLevel(context => context.Companies.Include(_ => _.Departments).ThenInclude(_ => _.Employees), SingleQueryCollections);
+
+    // Departments is restated to ThenInclude below it, and is one collection
+    [Test]
+    public async Task SingleQueryCollectionsCountsRestatedIncludeOnce() =>
+        await Assert.That(
+                Measure(
+                    context => context.Companies
+                        .Include(_ => _.Departments)
+                        .ThenInclude(_ => _.Employees)
+                        .Include(_ => _.Departments)
+                        .ThenInclude(_ => _.Company),
+                    SingleQueryCollections))
+            .IsEqualTo(2);
+
+    [Test]
+    public async Task SingleQueryCollectionsCountsStringInclude() =>
+        await Assert.That(
+                Measure(
+                    context => context.Companies.Include("Departments.Employees.Tasks"),
+                    SingleQueryCollections))
+            .IsEqualTo(3);
+
+    [Test]
+    public async Task SingleQueryCollectionsCountsProjectedCollections() =>
+        await Assert.That(
+                Measure(
+                    context => context.Companies.Select(
+                        _ => new
+                        {
+                            _.Name,
+                            Departments = _.Departments
+                                .Select(department => new
+                                {
+                                    department.Name,
+                                    Employees = department.Employees.ToList()
+                                })
+                                .ToList()
+                        }),
+                    SingleQueryCollections))
+            .IsEqualTo(2);
+
+    // AsSingleQuery overrides a context that splits by default
+    [Test]
+    public async Task SingleQueryCollectionsCountsAsSingleQuery()
+    {
+        var (context, _) = ContextBuilder.Build(
+            throwAt: SingleQueryCollections(Limits.None, 0),
+            configure: SplitByDefault);
+        var exception = Assert.Throws<QueryComplexityException>(
+            () => context.Companies
+                .Include(_ => _.Departments)
+                .AsSingleQuery()
+                .ToQueryString());
+        await Assert.That(exception.Violations.Single().Actual).IsEqualTo(1);
+    }
+
+    [Test]
+    public Task SingleQueryCollectionsIgnoresReferences() =>
+        AssertNoCollections(context => context.Employees.Include(_ => _.Department).ThenInclude(_ => _.Company));
+
+    // A collection only read by an aggregate is a subquery rather than a join
+    [Test]
+    public Task SingleQueryCollectionsIgnoresAggregates() =>
+        AssertNoCollections(
+            context => context.Companies.Select(
+                _ => new
+                {
+                    _.Name,
+                    Departments = _.Departments.Count(),
+                    Staffed = _.Departments.Any(department => department.Employees.Count > 0)
+                }));
+
+    [Test]
+    public Task SingleQueryCollectionsIgnoresAsSplitQuery() =>
+        AssertNoCollections(
+            context => context.Companies
+                .Include(_ => _.Departments)
+                .ThenInclude(_ => _.Employees)
+                .AsSplitQuery());
+
+    [Test]
+    public Task SingleQueryCollectionsIgnoresSplitByDefault() =>
+        AssertNoCollections(
+            context => context.Companies
+                .Include(_ => _.Departments)
+                .ThenInclude(_ => _.Employees),
+            SplitByDefault);
+
+    static void SplitByDefault(DbContextOptionsBuilder<TestDbContext> builder) =>
+        builder.UseSqlServer(
+            "Server=.;Database=Test;",
+            _ => _.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery));
+
+    static async Task AssertNoCollections(
+        Func<TestDbContext, IQueryable> query,
+        Action<DbContextOptionsBuilder<TestDbContext>>? configure = null)
+    {
+        var (context, logs) = ContextBuilder.Build(
+            logAt: SingleQueryCollections(Limits.None, 0),
+            configure: configure);
+        query(context).ToQueryString();
+        await Assert.That(logs.Count).IsEqualTo(0);
     }
 
     static async Task AssertLevel(

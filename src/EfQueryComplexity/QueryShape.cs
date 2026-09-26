@@ -1,4 +1,4 @@
-/// <summary>
+﻿/// <summary>
 /// What a query measures, independent of the values it is executed with.
 /// </summary>
 readonly record struct QueryShape(
@@ -8,4 +8,5 @@ readonly record struct QueryShape(
     int NavigationDepth,
     int Includes,
     int IncludeDepth,
+    int SingleQueryCollections,
     IReadOnlyList<Type> UnboundedTypes);
