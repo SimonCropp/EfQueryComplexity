@@ -1,4 +1,4 @@
-/// <summary>
+﻿/// <summary>
 /// Measures a query in a single pass.
 /// </summary>
 sealed class ShapeAnalyzer(IModel model) :
@@ -15,7 +15,7 @@ sealed class ShapeAnalyzer(IModel model) :
     int includeDepth;
     int navigationDepth;
 
-    public static QueryShape Analyze(Expression query, IModel model)
+    public static QueryShape Analyze(Expression query, IModel model, bool splitByDefault)
     {
         var analyzer = new ShapeAnalyzer(model);
         analyzer.Visit(query);
@@ -26,6 +26,7 @@ sealed class ShapeAnalyzer(IModel model) :
             analyzer.navigationDepth,
             analyzer.includes,
             analyzer.includeDepth,
+            CollectionCounter.Count(query, model, splitByDefault),
             UnboundedDetector.Find(query));
     }
 

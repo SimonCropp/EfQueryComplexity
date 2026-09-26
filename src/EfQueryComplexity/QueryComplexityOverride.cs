@@ -1,4 +1,4 @@
-namespace EfQueryComplexity;
+﻿namespace EfQueryComplexity;
 
 /// <summary>
 /// Levels that replace the configured ones for a single query.
@@ -28,6 +28,9 @@ public sealed record QueryComplexityOverride
 
     /// <summary>Maximum number of navigations in one Include chain.</summary>
     public int? MaxIncludeDepth { get; init; }
+
+    /// <summary>Maximum number of collections one SQL query loads.</summary>
+    public int? MaxSingleQueryCollections { get; init; }
 
     /// <summary>Maximum value passed to Take.</summary>
     public int? MaxTake { get; init; }

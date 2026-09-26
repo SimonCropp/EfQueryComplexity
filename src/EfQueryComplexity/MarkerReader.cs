@@ -1,4 +1,4 @@
-/// <summary>
+﻿/// <summary>
 /// Reads what the marker calls in a query asked for, and removes them where they have to go.
 /// </summary>
 /// <remarks>
@@ -132,6 +132,7 @@ sealed class MarkerReader(List<MethodCallExpression> chain) :
             MaxNavigationDepth = outer.MaxNavigationDepth ?? inner.MaxNavigationDepth,
             MaxIncludes = outer.MaxIncludes ?? inner.MaxIncludes,
             MaxIncludeDepth = outer.MaxIncludeDepth ?? inner.MaxIncludeDepth,
+            MaxSingleQueryCollections = outer.MaxSingleQueryCollections ?? inner.MaxSingleQueryCollections,
             MaxTake = outer.MaxTake ?? inner.MaxTake,
             MaxInValues = outer.MaxInValues ?? inner.MaxInValues,
             RejectUnbounded = outer.RejectUnbounded ?? inner.RejectUnbounded

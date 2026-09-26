@@ -1,4 +1,4 @@
-sealed class QueryComplexityOptionsExtension(
+﻿sealed class QueryComplexityOptionsExtension(
     QueryComplexityLimits logAt,
     QueryComplexityLimits? throwAt,
     int? sqlServerCostLimit) :
@@ -45,6 +45,7 @@ sealed class QueryComplexityOptionsExtension(
         Check(nameof(QueryComplexityLimits.MaxNavigationDepth), LogAt.MaxNavigationDepth, ThrowAt.MaxNavigationDepth);
         Check(nameof(QueryComplexityLimits.MaxIncludes), LogAt.MaxIncludes, ThrowAt.MaxIncludes);
         Check(nameof(QueryComplexityLimits.MaxIncludeDepth), LogAt.MaxIncludeDepth, ThrowAt.MaxIncludeDepth);
+        Check(nameof(QueryComplexityLimits.MaxSingleQueryCollections), LogAt.MaxSingleQueryCollections, ThrowAt.MaxSingleQueryCollections);
         Check(nameof(QueryComplexityLimits.MaxTake), LogAt.MaxTake, ThrowAt.MaxTake);
         Check(nameof(QueryComplexityLimits.MaxInValues), LogAt.MaxInValues, ThrowAt.MaxInValues);
     }

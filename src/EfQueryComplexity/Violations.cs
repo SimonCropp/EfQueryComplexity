@@ -1,4 +1,4 @@
-/// <summary>
+﻿/// <summary>
 /// Compares what a query measures against a set of levels, and describes what was exceeded.
 /// </summary>
 static class Violations
@@ -12,6 +12,7 @@ static class Violations
         Add(violations, nameof(QueryComplexityLimits.MaxNavigationDepth), limits.MaxNavigationDepth, shape.NavigationDepth);
         Add(violations, nameof(QueryComplexityLimits.MaxIncludes), limits.MaxIncludes, shape.Includes);
         Add(violations, nameof(QueryComplexityLimits.MaxIncludeDepth), limits.MaxIncludeDepth, shape.IncludeDepth);
+        Add(violations, nameof(QueryComplexityLimits.MaxSingleQueryCollections), limits.MaxSingleQueryCollections, shape.SingleQueryCollections);
 
         var rowTypes = CheckedTypes(shape.UnboundedTypes, limits.RejectUnbounded);
         if (rowTypes != null)
