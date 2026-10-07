@@ -149,8 +149,7 @@ sealed class ValuePlan :
 
             // A lambda parameter reads a row, and any other node Entity Framework added is a value
             // only it knows how to read
-            if (node is ParameterExpression ||
-                node is {NodeType: ExpressionType.Extension})
+            if (node is ParameterExpression or {NodeType: ExpressionType.Extension})
             {
                 CanRead = false;
                 return node;

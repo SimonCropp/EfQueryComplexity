@@ -45,5 +45,7 @@ sealed class ComplexityModelCacheKeyFactory(ModelCacheKeyFactoryDependencies dep
 
     // The levels are records, so this compares the levels themselves rather than the instances they
     // were configured with
+    // ReSharper disable NotAccessedPositionalProperty.Local
     sealed record Key(object Inner, QueryComplexityLimits LogAt, QueryComplexityLimits? ThrowAt);
+    // ReSharper restore NotAccessedPositionalProperty.Local
 }

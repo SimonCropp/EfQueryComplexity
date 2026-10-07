@@ -94,14 +94,18 @@ static class KeyLookup
     // The conditions every row the predicate returns meets
     static void AddConditions(Expression predicate, List<Expression> conditions)
     {
-        if (predicate is BinaryExpression {NodeType: ExpressionType.AndAlso} and)
+        while (true)
         {
-            AddConditions(and.Left, conditions);
-            AddConditions(and.Right, conditions);
-            return;
-        }
+            if (predicate is BinaryExpression {NodeType: ExpressionType.AndAlso} and)
+            {
+                AddConditions(and.Left, conditions);
+                predicate = and.Right;
+                continue;
+            }
 
-        conditions.Add(predicate);
+            conditions.Add(predicate);
+            break;
+        }
     }
 
     // Every part of the key is compared with one value, or every part but one is, and that one is
