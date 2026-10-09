@@ -134,6 +134,77 @@
             .IsEqualTo(2);
 
     [Test]
+    public async Task OperatorsCountSubqueries() =>
+        await Assert.That(
+                Measure(
+                    context => context.Companies
+                        .Where(_ => _.Name != "")
+                        .Select(
+                            _ => new
+                            {
+                                _.Name,
+                                Departments = _.Departments
+                                    .Where(department => department.Name != "")
+                                    .OrderBy(department => department.Name)
+                                    .Select(department => department.Name)
+                            }),
+                    Operators))
+            .IsEqualTo(5);
+
+    // What the results are held in is not part of the query. A projection ends each collection it
+    // returns with one of these, so counting them would count every collection twice.
+    [Test]
+    public async Task OperatorsIgnoreWhatHoldsTheResults() =>
+        await Assert.That(
+                Measure(
+                    context => context.Companies.Select(
+                        _ => new
+                        {
+                            Names = _.Departments
+                                .Select(department => department.Name)
+                                .ToList(),
+                            Employees = _.Departments
+                                .AsQueryable()
+                                .SelectMany(department => department.Employees)
+                                .ToArray(),
+                            Sizes = _.Departments
+                                .AsEnumerable()
+                                .Select(department => department.Employees.Count)
+                                .ToHashSet()
+                        }),
+                    Operators))
+            .IsEqualTo(4);
+
+    [Test]
+    public async Task OperatorsIgnoreOptions() =>
+        await Assert.That(
+                Measure(
+                    context => context.Employees
+                        .AsNoTracking()
+                        .AsTracking()
+                        .AsNoTrackingWithIdentityResolution()
+                        .AsSplitQuery()
+                        .AsSingleQuery()
+                        .IgnoreAutoIncludes()
+                        .IgnoreQueryFilters()
+                        .TagWith("tag")
+                        .TagWithCallSite()
+                        .Where(_ => _.Salary > 10),
+                    Operators))
+            .IsEqualTo(1);
+
+    // Each adds to what the query loads
+    [Test]
+    public async Task OperatorsCountIncludes() =>
+        await Assert.That(
+                Measure(
+                    context => context.Companies
+                        .Include(_ => _.Departments)
+                        .ThenInclude(_ => _.Employees),
+                    Operators))
+            .IsEqualTo(2);
+
+    [Test]
     public Task Message()
     {
         var (context, _) = ContextBuilder.Build(

@@ -119,7 +119,7 @@ A query is checked against the throw levels before the log levels, so a throw le
 | --- | --- | --- | --- |
 | `MaxNodes` | Expression nodes in the query | While compiled | 1000 |
 | `MaxDepth` | Nesting depth of the query expression | While compiled | 50 |
-| `MaxOperators` | LINQ operators, including in subqueries | While compiled | 30 |
+| `MaxOperators` | [LINQ operators](#operators), including in subqueries | While compiled | 30 |
 | `MaxNavigationDepth` | Navigations in one member access chain | While compiled | 3 |
 | `MaxIncludes` | `Include` calls | While compiled | 6 |
 | `MaxIncludeDepth` | Navigations in one `Include` chain | While compiled | 3 |
@@ -129,6 +129,16 @@ A query is checked against the throw levels before the log levels, so a throw le
 | `RejectUnbounded` | A query returning rows with no `Take` or lookup by key | While compiled | `All` |
 
 A check fires when the measured value is greater than the level. A level of `null` turns that check off.
+
+
+### Operators
+
+`MaxOperators` counts the calls that change what a query returns, or add to what it loads: `Where`, `Select`, `OrderBy`, `Join`, `Take`, `Count`, `Include`, `ThenInclude` and the rest of LINQ, in the query and in every subquery inside it.
+
+It does not count:
+
+ * A call that only says what to hold the results in: `ToList`, `ToArray`, `ToHashSet`, `AsEnumerable` and `AsQueryable`. A projection ends each collection it returns with one, so `Names = _.Employees.Select(_ => _.Name).ToList()` is one operator.
+ * A call that only says how to run the query: `AsNoTracking`, `AsNoTrackingWithIdentityResolution`, `AsTracking`, `AsSplitQuery`, `AsSingleQuery`, `IgnoreAutoIncludes`, `IgnoreQueryFilters`, `TagWith` and `TagWithCallSite`.
 
 
 ### Collections in a single query
