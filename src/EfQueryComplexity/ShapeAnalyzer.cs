@@ -51,10 +51,7 @@ sealed class ShapeAnalyzer(IModel model) :
         var method = node.Method;
         var declaringType = method.DeclaringType;
 
-        if (declaringType == typeof(Queryable) ||
-            declaringType == typeof(Enumerable) ||
-            declaringType == typeof(EntityFrameworkQueryableExtensions) ||
-            declaringType == typeof(RelationalQueryableExtensions))
+        if (IsOperator(method))
         {
             operators++;
         }
@@ -87,6 +84,44 @@ sealed class ShapeAnalyzer(IModel model) :
     {
         Track(ref navigationDepth, NavigationsInChain(node));
         return base.VisitMember(node);
+    }
+
+    // A call that changes what the query returns, or adds to what it loads. One that only says what
+    // to hold the results in, or how to run the query, adds nothing to it. A projection ends every
+    // collection it returns with a ToList, so counting those would count each collection twice.
+    static bool IsOperator(MethodInfo method)
+    {
+        var declaringType = method.DeclaringType;
+        var name = method.Name;
+
+        if (declaringType == typeof(Queryable) ||
+            declaringType == typeof(Enumerable))
+        {
+            return name is not
+                (nameof(Enumerable.ToList) or
+                 nameof(Enumerable.ToArray) or
+                 nameof(Enumerable.ToHashSet) or
+                 nameof(Enumerable.AsEnumerable) or
+                 nameof(Queryable.AsQueryable));
+        }
+
+        // Include and ThenInclude count, since each adds to what is loaded
+        if (declaringType == typeof(EntityFrameworkQueryableExtensions))
+        {
+            return name is not
+                (nameof(EntityFrameworkQueryableExtensions.AsNoTracking) or
+                 nameof(EntityFrameworkQueryableExtensions.AsNoTrackingWithIdentityResolution) or
+                 nameof(EntityFrameworkQueryableExtensions.AsTracking) or
+                 nameof(EntityFrameworkQueryableExtensions.IgnoreAutoIncludes) or
+                 nameof(EntityFrameworkQueryableExtensions.IgnoreQueryFilters) or
+                 nameof(EntityFrameworkQueryableExtensions.TagWith) or
+                 nameof(EntityFrameworkQueryableExtensions.TagWithCallSite));
+        }
+
+        return declaringType == typeof(RelationalQueryableExtensions) &&
+               name is not
+                   (nameof(RelationalQueryableExtensions.AsSplitQuery) or
+                    nameof(RelationalQueryableExtensions.AsSingleQuery));
     }
 
     // The depth of the Include chain ending at this call. An inner call of the same chain measures a

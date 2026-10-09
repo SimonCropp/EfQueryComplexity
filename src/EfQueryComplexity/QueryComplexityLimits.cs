@@ -10,7 +10,10 @@
 /// </remarks>
 /// <param name="MaxNodes">Maximum number of expression nodes in a query.</param>
 /// <param name="MaxDepth">Maximum nesting depth of a query expression.</param>
-/// <param name="MaxOperators">Maximum number of LINQ operators, including those in subqueries.</param>
+/// <param name="MaxOperators">
+/// Maximum number of LINQ operators, including those in subqueries. A call that only says what to
+/// hold the results in, like ToList, or how to run the query, like AsNoTracking, is not counted.
+/// </param>
 /// <param name="MaxNavigationDepth">Maximum number of navigations in one member access chain.</param>
 /// <param name="MaxIncludes">Maximum number of Include calls.</param>
 /// <param name="MaxIncludeDepth">Maximum number of navigations in one Include chain.</param>

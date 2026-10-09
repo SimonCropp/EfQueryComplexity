@@ -17,7 +17,11 @@ public sealed record QueryComplexityOverride
     /// <summary>Maximum nesting depth of a query expression.</summary>
     public int? MaxDepth { get; init; }
 
-    /// <summary>Maximum number of LINQ operators, including those in subqueries.</summary>
+    /// <summary>
+    /// Maximum number of LINQ operators, including those in subqueries. A call that only says what
+    /// to hold the results in, like ToList, or how to run the query, like AsNoTracking, is not
+    /// counted.
+    /// </summary>
     public int? MaxOperators { get; init; }
 
     /// <summary>Maximum number of navigations in one member access chain.</summary>
