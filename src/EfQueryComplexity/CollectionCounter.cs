@@ -16,6 +16,11 @@ sealed class CollectionCounter(IModel model) :
     // ThenInclude something else below it, counts that collection once
     HashSet<string> includePaths = [];
     HashSet<MethodCallExpression> ignoredIncludes = [];
+
+    // The collections a projection returns in place of the entity they belong to, keyed like
+    // includePaths. An Include of one of them only says what to load under it, so the two are one
+    // collection.
+    HashSet<string> projectedPaths = [];
     int projected;
 
     public static int Count(Expression query, IModel model, bool splitByDefault)
@@ -27,6 +32,7 @@ sealed class CollectionCounter(IModel model) :
 
         var counter = new CollectionCounter(model);
         counter.Visit(query);
+        counter.includePaths.ExceptWith(counter.projectedPaths);
         return counter.includePaths.Count + counter.projected;
     }
 
@@ -83,7 +89,7 @@ sealed class CollectionCounter(IModel model) :
             }
 
             Visit(node.Arguments[0]);
-            new ProjectionCounter(this).Visit(selector);
+            new ProjectionCounter(this, RowNotReturned(selector)).Visit(selector);
             return node;
         }
 
@@ -139,6 +145,31 @@ sealed class CollectionCounter(IModel model) :
         return finder.Found;
     }
 
+    // The row a selector is given, when the selector only reads members of it. A row that is also
+    // returned, or passed to a method, has its Includes loaded into it, as well as whatever the
+    // projection loads.
+    static ParameterExpression? RowNotReturned(Expression selector)
+    {
+        if (selector is UnaryExpression {NodeType: ExpressionType.Quote} quote)
+        {
+            selector = quote.Operand;
+        }
+
+        if (selector is not LambdaExpression {Parameters: [var row, ..]} lambda)
+        {
+            return null;
+        }
+
+        var finder = new BareUseFinder(row);
+        finder.Visit(lambda.Body);
+        if (finder.Found)
+        {
+            return null;
+        }
+
+        return row;
+    }
+
     // Whether a value is, or holds, entities. A shared type counts, since any entity could use it.
     bool HoldsEntities(Type type)
     {
@@ -158,7 +189,7 @@ sealed class CollectionCounter(IModel model) :
         var path = new List<string>();
         var rootType = IncludeChainRoot(node, path);
         var type = rootType;
-        var key = "";
+        var key = PathRoot(rootType);
 
         foreach (var name in path)
         {
@@ -177,6 +208,10 @@ sealed class CollectionCounter(IModel model) :
             type = navigation.TargetEntityType.ClrType;
         }
     }
+
+    // Paths start with the entity they are from, so one only matches a path from the same entity
+    static string PathRoot(Type type) =>
+        type.FullName ?? type.Name;
 
     // Fills path with the navigation names from the root entity to the end of this Include chain,
     // and returns the root entity type
@@ -283,7 +318,7 @@ sealed class CollectionCounter(IModel model) :
     /// <summary>
     /// Counts the collections a projection returns, including collections nested in them.
     /// </summary>
-    sealed class ProjectionCounter(CollectionCounter counter) :
+    sealed class ProjectionCounter(CollectionCounter counter, ParameterExpression? row) :
         ExpressionVisitor
     {
         public override Expression? Visit(Expression? node)
@@ -294,9 +329,10 @@ sealed class CollectionCounter(IModel model) :
             }
 
             if (Sequences.IsSequence(node.Type) &&
-                LoadsRows(node))
+                LoadsRows(node, out var navigation))
             {
                 counter.projected++;
+                AddProjectedPath(navigation);
 
                 // A projection inside the collection can return further collections
                 VisitSelectors(node);
@@ -337,14 +373,16 @@ sealed class CollectionCounter(IModel model) :
         }
 
         // Whether a sequence comes from the database: a collection navigation, or a query
-        bool LoadsRows(Expression node)
+        bool LoadsRows(Expression node, out MemberExpression? navigation)
         {
+            navigation = null;
             var current = node;
             while (true)
             {
                 switch (current)
                 {
                     case MemberExpression member when counter.IsCollectionNavigation(member.Type):
+                        navigation = member;
                         return true;
                     case MethodCallExpression {Method.IsStatic: true, Arguments.Count: > 0} call:
                         current = call.Arguments[0];
@@ -360,6 +398,43 @@ sealed class CollectionCounter(IModel model) :
             }
         }
 
+        // Records a collection read from the row the projection is given, by the path an Include
+        // would name it with
+        void AddProjectedPath(MemberExpression? navigation)
+        {
+            if (navigation == null ||
+                row == null)
+            {
+                return;
+            }
+
+            var path = "";
+            Expression? current = navigation;
+            while (true)
+            {
+                switch (current)
+                {
+                    case MemberExpression member:
+                        path = "." + member.Member.Name + path;
+                        current = member.Expression;
+                        continue;
+                    case UnaryExpression
+                    {
+                        NodeType: ExpressionType.Convert or ExpressionType.ConvertChecked or ExpressionType.TypeAs
+                    } cast:
+                        current = cast.Operand;
+                        continue;
+                }
+
+                break;
+            }
+
+            if (current == row)
+            {
+                counter.projectedPaths.Add(PathRoot(row.Type) + path);
+            }
+        }
+
         void VisitSelectors(Expression node)
         {
             var current = node;
@@ -372,6 +447,44 @@ sealed class CollectionCounter(IModel model) :
 
                 current = call.Arguments[0];
             }
+        }
+    }
+
+    /// <summary>
+    /// Finds a use of a row other than reading a member of it.
+    /// </summary>
+    sealed class BareUseFinder(ParameterExpression row) :
+        ExpressionVisitor
+    {
+        public bool Found { get; private set; }
+
+        protected override Expression VisitMember(MemberExpression node)
+        {
+            var source = node.Expression;
+            while (source is UnaryExpression
+                   {
+                       NodeType: ExpressionType.Convert or ExpressionType.ConvertChecked or ExpressionType.TypeAs
+                   } cast)
+            {
+                source = cast.Operand;
+            }
+
+            if (source == row)
+            {
+                return node;
+            }
+
+            return base.VisitMember(node);
+        }
+
+        protected override Expression VisitParameter(ParameterExpression node)
+        {
+            if (node == row)
+            {
+                Found = true;
+            }
+
+            return node;
         }
     }
 

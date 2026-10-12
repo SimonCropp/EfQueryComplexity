@@ -425,6 +425,53 @@
                     SingleQueryCollections))
             .IsEqualTo(2);
 
+    // The Include only says what to load under the collection the projection returns
+    [Test]
+    public async Task SingleQueryCollectionsCountsAProjectedAndIncludedCollectionOnce() =>
+        await Assert.That(
+                Measure(
+                    context => context.Employees
+                        .Include("Tasks.Employee")
+                        .Select(
+                            _ => new Employee
+                            {
+                                Id = _.Id,
+                                Tasks = _.Tasks.ToList()
+                            }),
+                    SingleQueryCollections))
+            .IsEqualTo(1);
+
+    [Test]
+    public async Task SingleQueryCollectionsCountsACollectionIncludedUnderAProjectedOne() =>
+        await Assert.That(
+                Measure(
+                    context => context.Companies
+                        .Include("Departments.Employees")
+                        .Select(
+                            _ => new Company
+                            {
+                                Id = _.Id,
+                                Departments = _.Departments.ToList()
+                            }),
+                    SingleQueryCollections))
+            .IsEqualTo(2);
+
+    // The Include loads the tasks into the employee, and the projection loads them again
+    [Test]
+    public async Task SingleQueryCollectionsCountsBothWhenTheRowIsReturnedToo() =>
+        await Assert.That(
+                Measure(
+                    context => context.Employees
+                        .Include(_ => _.Tasks)
+                        .Select(
+                            _ => new
+                            {
+                                Employee = _,
+                                Tasks = _.Tasks.ToList()
+                            }),
+                    SingleQueryCollections))
+            .IsEqualTo(2);
+
     static string Describe(Company company) =>
         company.Name;
 
