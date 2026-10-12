@@ -150,6 +150,8 @@ A single SQL query joins every collection it loads, so each multiplies the rows 
  * Collection navigations in `Include` and `ThenInclude`, including string paths. A collection restated to `ThenInclude` something below it counts once.
  * Collections a projection returns, for example `Employees = _.Employees.ToList()`, including collections nested in them.
 
+A collection that a projection returns and an `Include` also names counts once, as in `.Include("Employees.Manager").Select(_ => new Department { Employees = _.Employees.ToList() })`. The `Include` there only says what to load under the collection. Both count when the projection returns the row itself as well, since the `Include` then loads the collection into it a second time.
+
 It does not count:
 
  * Reference navigations.
