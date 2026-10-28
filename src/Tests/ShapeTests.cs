@@ -243,7 +243,44 @@
 
     [Test]
     public Task SingleQueryCollectionsLevel() =>
-        AssertLevel(context => context.Companies.Include(_ => _.Departments).ThenInclude(_ => _.Employees), SingleQueryCollections);
+        AssertLevel(context => context.Employees.Include(_ => _.Tasks).Include(_ => _.Department.Employees), SingleQueryCollections);
+
+    // Tasks and the department's employees are side by side, so multiply each other's rows
+    [Test]
+    public async Task SingleQueryCollectionsCountsSideBySideIncludes() =>
+        await Assert.That(
+                Measure(
+                    context => context.Employees
+                        .Include(_ => _.Tasks)
+                        .Include(_ => _.Department)
+                        .ThenInclude(_ => _.Employees),
+                    SingleQueryCollections))
+            .IsEqualTo(2);
+
+    // A row per task, so the chain is one collection
+    [Test]
+    public async Task SingleQueryCollectionsCountsNestedIncludesOnce() =>
+        await Assert.That(
+                Measure(
+                    context => context.Companies
+                        .Include(_ => _.Departments)
+                        .ThenInclude(_ => _.Employees)
+                        .ThenInclude(_ => _.Tasks),
+                    SingleQueryCollections))
+            .IsEqualTo(1);
+
+    // Each department holds its employees and its company's departments side by side
+    [Test]
+    public async Task SingleQueryCollectionsCountsSideBySideIncludesInANestedOne() =>
+        await Assert.That(
+                Measure(
+                    context => context.Companies
+                        .Include(_ => _.Departments)
+                        .ThenInclude(_ => _.Employees)
+                        .Include(_ => _.Departments)
+                        .ThenInclude(_ => _.Company.Departments),
+                    SingleQueryCollections))
+            .IsEqualTo(2);
 
     // Departments is restated to ThenInclude below it, and is one collection
     [Test]
@@ -256,15 +293,15 @@
                         .Include(_ => _.Departments)
                         .ThenInclude(_ => _.Company),
                     SingleQueryCollections))
-            .IsEqualTo(2);
+            .IsEqualTo(1);
 
     [Test]
     public async Task SingleQueryCollectionsCountsStringInclude() =>
         await Assert.That(
                 Measure(
-                    context => context.Companies.Include("Departments.Employees.Tasks"),
+                    context => context.Employees.Include("Tasks").Include("Department.Employees.Tasks"),
                     SingleQueryCollections))
-            .IsEqualTo(3);
+            .IsEqualTo(2);
 
     [Test]
     public async Task SingleQueryCollectionsCountsProjectedCollections() =>
@@ -279,6 +316,45 @@
                                 {
                                     department.Name,
                                     Employees = department.Employees.ToList()
+                                })
+                                .ToList()
+                        }),
+                    SingleQueryCollections))
+            .IsEqualTo(1);
+
+    [Test]
+    public async Task SingleQueryCollectionsCountsSideBySideProjectedCollections() =>
+        await Assert.That(
+                Measure(
+                    context => context.Departments.Select(
+                        _ => new
+                        {
+                            _.Name,
+                            Employees = _.Employees.ToList(),
+                            Siblings = _.Company.Departments
+                                .Select(department => new
+                                {
+                                    department.Name,
+                                    Employees = department.Employees.ToList()
+                                })
+                                .ToList()
+                        }),
+                    SingleQueryCollections))
+            .IsEqualTo(2);
+
+    // Each department returns its employees and their tasks side by side
+    [Test]
+    public async Task SingleQueryCollectionsCountsSideBySideCollectionsInAProjectedOne() =>
+        await Assert.That(
+                Measure(
+                    context => context.Companies.Select(
+                        _ => new
+                        {
+                            Departments = _.Departments
+                                .Select(department => new
+                                {
+                                    Employees = department.Employees.ToList(),
+                                    Tasks = department.Employees.SelectMany(employee => employee.Tasks).ToList()
                                 })
                                 .ToList()
                         }),
@@ -399,7 +475,7 @@
                                 Company = _
                             }),
                     SingleQueryCollections))
-            .IsEqualTo(2);
+            .IsEqualTo(1);
 
     // Entity Framework carries the ThenInclude onto the department the projection returns
     [Test]
@@ -423,7 +499,7 @@
                         .ThenInclude(_ => _.Employees)
                         .Select(_ => Describe(_)),
                     SingleQueryCollections))
-            .IsEqualTo(2);
+            .IsEqualTo(1);
 
     // The Include only says what to load under the collection the projection returns
     [Test]
@@ -454,7 +530,7 @@
                                 Departments = _.Departments.ToList()
                             }),
                     SingleQueryCollections))
-            .IsEqualTo(2);
+            .IsEqualTo(1);
 
     // The Include loads the tasks into the employee, and the projection loads them again
     [Test]

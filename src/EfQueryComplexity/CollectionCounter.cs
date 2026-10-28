@@ -1,13 +1,15 @@
 /// <summary>
-/// Counts the collections one SQL query loads: collection Includes, and collections a projection
-/// returns.
+/// Counts the collections one SQL query loads side by side: collection Includes, and collections a
+/// projection returns.
 /// </summary>
 /// <remarks>
-/// A single query joins every collection it loads, so each multiplies the rows returned for the
-/// others, a cartesian explosion. A split query loads each collection in its own query, so counts
-/// none. A collection only read by an aggregate, like <c>_.Employees.Count()</c>, is a subquery rather
-/// than a join, so is not counted. Nor is an Include that Entity Framework ignores, since the query
-/// returns no entity for it to load into.
+/// A single query joins every collection it loads. Collections side by side multiply each other's
+/// rows, a cartesian explosion. A collection nested in another does not: the query returns a row per
+/// item of the inner one, so a chain of nested collections counts as one. A collection holding
+/// several side by side counts as many as it holds. A split query loads each collection in its own
+/// query, so counts none. A collection only read by an aggregate, like <c>_.Employees.Count()</c>, is
+/// a subquery rather than a join, so is not counted. Nor is an Include that Entity Framework ignores,
+/// since the query returns no entity for it to load into.
 /// </remarks>
 sealed class CollectionCounter(IModel model) :
     ExpressionVisitor
@@ -18,9 +20,11 @@ sealed class CollectionCounter(IModel model) :
     HashSet<MethodCallExpression> ignoredIncludes = [];
 
     // The collections a projection returns in place of the entity they belong to, keyed like
-    // includePaths. An Include of one of them only says what to load under it, so the two are one
-    // collection.
-    HashSet<string> projectedPaths = [];
+    // includePaths, with the count of what the projection loads inside each. An Include of one of
+    // them only says what to load under it, so the two are one collection.
+    Dictionary<string, int> projectedPaths = [];
+
+    // What projections load that has no path, so cannot be nested under an Include
     int projected;
 
     public static int Count(Expression query, IModel model, bool splitByDefault)
@@ -32,8 +36,55 @@ sealed class CollectionCounter(IModel model) :
 
         var counter = new CollectionCounter(model);
         counter.Visit(query);
-        counter.includePaths.ExceptWith(counter.projectedPaths);
-        return counter.includePaths.Count + counter.projected;
+        return counter.CountPaths() + counter.projected;
+    }
+
+    // Each collection counts as one, or as the sum of what it holds when that is more. A path is held
+    // by the longest other path it starts with, so walking the longest first counts every collection
+    // before the one holding it.
+    int CountPaths()
+    {
+        var held = new Dictionary<string, int>(projectedPaths);
+        foreach (var path in includePaths)
+        {
+            held.TryAdd(path, 0);
+        }
+
+        var total = 0;
+        foreach (var path in held.Keys.OrderByDescending(_ => _.Length).ToList())
+        {
+            var count = Math.Max(1, held[path]);
+            var holder = Holder(path, held);
+            if (holder == null)
+            {
+                total += count;
+            }
+            else
+            {
+                held[holder] += count;
+            }
+        }
+
+        return total;
+    }
+
+    static string? Holder(string path, Dictionary<string, int> paths)
+    {
+        var current = path;
+        while (true)
+        {
+            var index = current.LastIndexOf('.');
+            if (index < 0)
+            {
+                return null;
+            }
+
+            current = current[..index];
+            if (paths.ContainsKey(current))
+            {
+                return current;
+            }
+        }
     }
 
     // AsSplitQuery and AsSingleQuery apply to the whole query, and override the context default
@@ -89,7 +140,9 @@ sealed class CollectionCounter(IModel model) :
             }
 
             Visit(node.Arguments[0]);
-            new ProjectionCounter(this, RowNotReturned(selector)).Visit(selector);
+            var projection = new ProjectionCounter(this, RowNotReturned(selector));
+            projection.Visit(selector);
+            projected += projection.Count;
             return node;
         }
 
@@ -316,11 +369,15 @@ sealed class CollectionCounter(IModel model) :
     }
 
     /// <summary>
-    /// Counts the collections a projection returns, including collections nested in them.
+    /// Counts the collections a projection returns side by side, a collection counting as what it
+    /// holds when that is more than one.
     /// </summary>
     sealed class ProjectionCounter(CollectionCounter counter, ParameterExpression? row) :
         ExpressionVisitor
     {
+        // The collections with no path, which an Include cannot be nested under
+        public int Count { get; private set; }
+
         public override Expression? Visit(Expression? node)
         {
             if (node == null)
@@ -331,11 +388,15 @@ sealed class CollectionCounter(IModel model) :
             if (Sequences.IsSequence(node.Type) &&
                 LoadsRows(node, out var navigation))
             {
-                counter.projected++;
-                AddProjectedPath(navigation);
+                // A projection inside the collection can return further collections, which are
+                // nested in it
+                var inner = new ProjectionCounter(counter, null);
+                inner.VisitSelectors(node);
+                if (!AddProjectedPath(navigation, inner.Count))
+                {
+                    Count += Math.Max(1, inner.Count);
+                }
 
-                // A projection inside the collection can return further collections
-                VisitSelectors(node);
                 return node;
             }
 
@@ -399,13 +460,13 @@ sealed class CollectionCounter(IModel model) :
         }
 
         // Records a collection read from the row the projection is given, by the path an Include
-        // would name it with
-        void AddProjectedPath(MemberExpression? navigation)
+        // would name it with. A collection projected twice is loaded twice, so the second has no path.
+        bool AddProjectedPath(MemberExpression? navigation, int inner)
         {
             if (navigation == null ||
                 row == null)
             {
-                return;
+                return false;
             }
 
             var path = "";
@@ -429,10 +490,12 @@ sealed class CollectionCounter(IModel model) :
                 break;
             }
 
-            if (current == row)
+            if (current != row)
             {
-                counter.projectedPaths.Add(PathRoot(row.Type) + path);
+                return false;
             }
+
+            return counter.projectedPaths.TryAdd(PathRoot(row.Type) + path, inner);
         }
 
         void VisitSelectors(Expression node)

@@ -21,7 +21,7 @@ The checks bound what one query can ask for, whichever layer built it:
 | Requesting every row | `RejectUnbounded`, `MaxTake` |
 | Deeply nested or very large queries | `MaxNodes`, `MaxDepth`, `MaxOperators` |
 | Long navigation chains and includes, which multiply joins | `MaxNavigationDepth`, `MaxIncludes`, `MaxIncludeDepth` |
-| Several collections in one query, which multiply rows | `MaxSingleQueryCollections` |
+| Collections side by side in one query, which multiply rows | `MaxSingleQueryCollections` |
 | Huge `IN` lists | `MaxInValues` |
 | A query that passes every check but is still expensive | [SQL Server cost limit](#sql-server-cost-limit) |
 
@@ -123,7 +123,7 @@ A query is checked against the throw levels before the log levels, so a throw le
 | `MaxNavigationDepth` | Navigations in one member access chain | While compiled | 3 |
 | `MaxIncludes` | `Include` calls | While compiled | 6 |
 | `MaxIncludeDepth` | Navigations in one `Include` chain | While compiled | 3 |
-| `MaxSingleQueryCollections` | Collections one SQL query loads | While compiled | 1 |
+| `MaxSingleQueryCollections` | Collections one SQL query loads side by side | While compiled | 1 |
 | `MaxTake` | The value passed to `Take` | Every execution | 1000 |
 | `MaxInValues` | Values in the largest list the query sends | Every execution | 1000 |
 | `RejectUnbounded` | A query returning rows with no `Take` or lookup by key | While compiled | `All` |
@@ -143,9 +143,11 @@ It does not count:
 
 ### Collections in a single query
 
-A single SQL query joins every collection it loads, so each multiplies the rows returned for the others. Loading 10 departments with 50 employees and 20 projects each returns 10,000 rows for 710 entities. This is a [cartesian explosion](https://learn.microsoft.com/en-us/ef/core/querying/single-split-queries).
+A single SQL query joins every collection it loads, so collections side by side multiply each other's rows. Loading 10 departments with 50 employees and 20 projects each returns 10,000 rows for 710 entities. This is a [cartesian explosion](https://learn.microsoft.com/en-us/ef/core/querying/single-split-queries).
 
-`MaxSingleQueryCollections` counts:
+A collection nested in another does not multiply. Loading departments, their employees, and each employee's tasks returns a row per task, so the chain counts as one. A collection holding several side by side counts as many as it holds, so departments with both employees and projects counts as two.
+
+`MaxSingleQueryCollections` counts, side by side in that way:
 
  * Collection navigations in `Include` and `ThenInclude`, including string paths. A collection restated to `ThenInclude` something below it counts once.
  * Collections a projection returns, for example `Employees = _.Employees.ToList()`, including collections nested in them.
@@ -159,7 +161,7 @@ It does not count:
  * Any collection in a split query, from `AsSplitQuery()` or `UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery)`, since each collection is then loaded by its own query. `AsSingleQuery()` overrides the default.
  * An `Include` that Entity Framework ignores, because the query returns no entity for it to load into. A `Select` returning no entity, like `Select(_ => _.Name)` or `Select(_ => new { _.Name })`, or an aggregate like `Count()`, makes Entity Framework ignore the Includes before it. A projection that could return an entity keeps them counted, including one that passes the entity to a method.
 
-The log default of 1 matches the point where Entity Framework logs `MultipleCollectionIncludeWarning`. That warning only covers `Include`, and only when no splitting behavior is configured.
+The log default of 1 allows one chain of nested collections, and logs as soon as two load side by side.
 
 
 ### Unbounded queries
