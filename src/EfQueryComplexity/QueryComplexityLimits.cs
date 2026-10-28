@@ -18,8 +18,10 @@
 /// <param name="MaxIncludes">Maximum number of Include calls.</param>
 /// <param name="MaxIncludeDepth">Maximum number of navigations in one Include chain.</param>
 /// <param name="MaxSingleQueryCollections">
-/// Maximum number of collections one SQL query loads, through collection Includes and collections in
-/// a projection. Each multiplies the rows returned for the others. A split query counts none.
+/// Maximum number of collections one SQL query loads side by side, through collection Includes and
+/// collections in a projection. Collections side by side multiply each other's rows. A chain of nested
+/// collections counts as one, since it returns a row per item of the innermost. A split query counts
+/// none.
 /// </param>
 /// <param name="MaxTake">Maximum value passed to Take. Checked on every execution.</param>
 /// <param name="MaxInValues">Maximum number of values in a list the query sends, such as a Contains list. Checked on every execution.</param>
