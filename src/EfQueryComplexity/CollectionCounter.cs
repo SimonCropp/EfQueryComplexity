@@ -14,61 +14,88 @@
 sealed class CollectionCounter(IModel model) :
     ExpressionVisitor
 {
+    // A counted collection, named for the message as the entity it is from and the navigations to
+    // it, with where in the query it was found so the message lists them in query order
+    readonly record struct Collection(int Order, string Name);
+
     // Keyed on the full path from the root, so an Include chain that restates a collection, to
     // ThenInclude something else below it, counts that collection once
     HashSet<string> includePaths = [];
     HashSet<MethodCallExpression> ignoredIncludes = [];
 
     // The collections a projection returns in place of the entity they belong to, keyed like
-    // includePaths, with the count of what the projection loads inside each. An Include of one of
-    // them only says what to load under it, so the two are one collection.
-    Dictionary<string, int> projectedPaths = [];
+    // includePaths, with what the projection loads inside each. An Include of one of them only says
+    // what to load under it, so the two are one collection.
+    Dictionary<string, List<Collection>> projectedPaths = [];
 
     // What projections load that has no path, so cannot be nested under an Include
-    int projected;
+    List<Collection> projected = [];
 
-    public static int Count(Expression query, IModel model, bool splitByDefault)
+    // The name and position of each path, from where it was first found
+    Dictionary<string, Collection> paths = [];
+    int order;
+
+    /// <summary>
+    /// The collections the query loads side by side, in query order, named as the entity they are
+    /// from and the navigations to them, for example <c>Department.Employees</c>.
+    /// </summary>
+    public static IReadOnlyList<string> Count(Expression query, IModel model, bool splitByDefault)
     {
         if (IsSplit(query, splitByDefault))
         {
-            return 0;
+            return [];
         }
 
         var counter = new CollectionCounter(model);
         counter.Visit(query);
-        return counter.CountPaths() + counter.projected;
+        var collections = counter.CountPaths();
+        collections.AddRange(counter.projected);
+        return collections
+            .OrderBy(_ => _.Order)
+            .Select(_ => _.Name)
+            .ToList();
     }
 
     // Each collection counts as one, or as the sum of what it holds when that is more. A path is held
     // by the longest other path it starts with, so walking the longest first counts every collection
     // before the one holding it.
-    int CountPaths()
+    List<Collection> CountPaths()
     {
-        var held = new Dictionary<string, int>(projectedPaths);
-        foreach (var path in includePaths)
+        var held = new Dictionary<string, List<Collection>>();
+        foreach (var (path, inner) in projectedPaths)
         {
-            held.TryAdd(path, 0);
+            held[path] = [..inner];
         }
 
-        var total = 0;
+        foreach (var path in includePaths)
+        {
+            held.TryAdd(path, []);
+        }
+
+        var total = new List<Collection>();
         foreach (var path in held.Keys.OrderByDescending(_ => _.Length).ToList())
         {
-            var count = Math.Max(1, held[path]);
+            var collections = held[path];
+            if (collections.Count == 0)
+            {
+                collections = [paths[path]];
+            }
+
             var holder = Holder(path, held);
             if (holder == null)
             {
-                total += count;
+                total.AddRange(collections);
             }
             else
             {
-                held[holder] += count;
+                held[holder].AddRange(collections);
             }
         }
 
         return total;
     }
 
-    static string? Holder(string path, Dictionary<string, int> paths)
+    static string? Holder(string path, Dictionary<string, List<Collection>> paths)
     {
         var current = path;
         while (true)
@@ -117,12 +144,14 @@ sealed class CollectionCounter(IModel model) :
 
         if (IsInclude(method))
         {
+            // The source first, so the Includes are found in query order
+            var result = base.VisitMethodCall(node);
             if (!ignoredIncludes.Contains(node))
             {
                 AddIncludePaths(node);
             }
 
-            return base.VisitMethodCall(node);
+            return result;
         }
 
         if (declaringType != typeof(Queryable) &&
@@ -142,7 +171,7 @@ sealed class CollectionCounter(IModel model) :
             Visit(node.Arguments[0]);
             var projection = new ProjectionCounter(this, RowNotReturned(selector));
             projection.Visit(selector);
-            projected += projection.Count;
+            projected.AddRange(projection.Collections);
             return node;
         }
 
@@ -243,19 +272,22 @@ sealed class CollectionCounter(IModel model) :
         var rootType = IncludeChainRoot(node, path);
         var type = rootType;
         var key = PathRoot(rootType);
+        var name = rootType.Name;
 
-        foreach (var name in path)
+        foreach (var segment in path)
         {
-            var navigation = FindNavigation(type, name);
+            var navigation = FindNavigation(type, segment);
             if (navigation == null)
             {
                 return;
             }
 
-            key += "." + name;
-            if (navigation.IsCollection)
+            key += "." + segment;
+            name += "." + segment;
+            if (navigation.IsCollection &&
+                includePaths.Add(key))
             {
-                includePaths.Add(key);
+                AddPath(key, name);
             }
 
             type = navigation.TargetEntityType.ClrType;
@@ -265,6 +297,12 @@ sealed class CollectionCounter(IModel model) :
     // Paths start with the entity they are from, so one only matches a path from the same entity
     static string PathRoot(Type type) =>
         type.FullName ?? type.Name;
+
+    void AddPath(string key, string name) =>
+        paths.TryAdd(key, Name(name));
+
+    Collection Name(string name) =>
+        new(order++, name);
 
     // Fills path with the navigation names from the root entity to the end of this Include chain,
     // and returns the root entity type
@@ -376,7 +414,7 @@ sealed class CollectionCounter(IModel model) :
         ExpressionVisitor
     {
         // The collections with no path, which an Include cannot be nested under
-        public int Count { get; private set; }
+        public List<Collection> Collections { get; } = [];
 
         public override Expression? Visit(Expression? node)
         {
@@ -388,19 +426,40 @@ sealed class CollectionCounter(IModel model) :
             if (Sequences.IsSequence(node.Type) &&
                 LoadsRows(node, out var navigation))
             {
+                var name = counter.Name(Describe(node, navigation));
+
                 // A projection inside the collection can return further collections, which are
                 // nested in it
                 var inner = new ProjectionCounter(counter, null);
                 inner.VisitSelectors(node);
-                if (!AddProjectedPath(navigation, inner.Count))
+                if (!AddProjectedPath(navigation, inner.Collections))
                 {
-                    Count += Math.Max(1, inner.Count);
+                    if (inner.Collections.Count == 0)
+                    {
+                        Collections.Add(name);
+                    }
+                    else
+                    {
+                        Collections.AddRange(inner.Collections);
+                    }
                 }
 
                 return node;
             }
 
             return base.Visit(node);
+        }
+
+        // A collection navigation is named for the entity it is read from, and a query for the set
+        // it reads
+        static string Describe(Expression node, MemberExpression? navigation)
+        {
+            if (navigation == null)
+            {
+                return $"DbSet<{Sequences.ElementType(node.Type).Name}>";
+            }
+
+            return $"{navigation.Expression!.Type.Name}.{navigation.Member.Name}";
         }
 
         // An aggregate, like Count or Any, reads a collection without returning it
@@ -461,7 +520,7 @@ sealed class CollectionCounter(IModel model) :
 
         // Records a collection read from the row the projection is given, by the path an Include
         // would name it with. A collection projected twice is loaded twice, so the second has no path.
-        bool AddProjectedPath(MemberExpression? navigation, int inner)
+        bool AddProjectedPath(MemberExpression? navigation, List<Collection> inner)
         {
             if (navigation == null ||
                 row == null)
@@ -495,7 +554,14 @@ sealed class CollectionCounter(IModel model) :
                 return false;
             }
 
-            return counter.projectedPaths.TryAdd(PathRoot(row.Type) + path, inner);
+            var key = PathRoot(row.Type) + path;
+            if (!counter.projectedPaths.TryAdd(key, inner))
+            {
+                return false;
+            }
+
+            counter.AddPath(key, row.Type.Name + path);
+            return true;
         }
 
         void VisitSelectors(Expression node)

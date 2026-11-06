@@ -163,6 +163,8 @@ It does not count:
 
 The log default of 1 allows one chain of nested collections, and logs as soon as two load side by side.
 
+The message names the collections loaded side by side, in query order, and so does `QueryComplexityViolation.Collections`. Each is the entity it is from and the navigations to it, so `Employees.Include(_ => _.Tasks).Include(_ => _.Department).ThenInclude(_ => _.Employees)` reports `Employee.Tasks, Employee.Department.Employees`. A chain of nested collections is named by the one at its end.
+
 
 ### Unbounded queries
 

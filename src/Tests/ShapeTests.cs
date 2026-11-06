@@ -443,7 +443,7 @@
             .ThenInclude(_ => _.Employees);
         var count = Expression.Call(typeof(Queryable), nameof(Queryable.Count), [typeof(Company)], query.Expression);
 
-        await Assert.That(CollectionCounter.Count(count, context.Model, splitByDefault: false)).IsEqualTo(0);
+        await Assert.That(CollectionCounter.Count(count, context.Model, splitByDefault: false)).IsEmpty();
     }
 
     // The projection loads the department names itself, and the Include is ignored
@@ -547,6 +547,104 @@
                             }),
                     SingleQueryCollections))
             .IsEqualTo(2);
+
+    // The message names the collections side by side, so the developer knows which to move
+    [Test]
+    public Task SingleQueryCollectionsMessage()
+    {
+        var (context, _) = ContextBuilder.Build(throwAt: SingleQueryCollections(Limits.None, 1));
+
+        return Throws(
+                () => context.Employees
+                    .Include(_ => _.Tasks)
+                    .Include(_ => _.Department)
+                    .ThenInclude(_ => _.Employees)
+                    .ToQueryString())
+            .IgnoreStackTrace();
+    }
+
+    [Test]
+    public async Task SingleQueryCollectionsLogNamesCollections()
+    {
+        var (context, logs) = ContextBuilder.Build(logAt: SingleQueryCollections(Limits.None, 1));
+
+        context.Employees
+            .Include(_ => _.Tasks)
+            .Include(_ => _.Department)
+            .ThenInclude(_ => _.Employees)
+            .ToQueryString();
+
+        await Assert.That(logs.Single()).Contains("Employee.Tasks, Employee.Department.Employees");
+    }
+
+    // Includes are named in query order, as the full path from the root entity
+    [Test]
+    public async Task SingleQueryCollectionsNamesIncludesInQueryOrder() =>
+        await Assert.That(
+                Collections(
+                    context => context.Companies
+                        .Include(_ => _.Departments)
+                        .ThenInclude(_ => _.Employees)
+                        .Include(_ => _.Departments)
+                        .ThenInclude(_ => _.Company.Departments)))
+            .IsEquivalentTo(["Company.Departments.Employees", "Company.Departments.Company.Departments"]);
+
+    // A chain is named by the collection at its end, since that is what the row is per
+    [Test]
+    public async Task SingleQueryCollectionsNamesNestedIncludesOnce() =>
+        await Assert.That(
+                Collections(
+                    context => context.Companies
+                        .Include(_ => _.Departments)
+                        .ThenInclude(_ => _.Employees)
+                        .ThenInclude(_ => _.Tasks)))
+            .IsEquivalentTo(["Company.Departments.Employees.Tasks"]);
+
+    [Test]
+    public async Task SingleQueryCollectionsNamesStringIncludes() =>
+        await Assert.That(
+                Collections(context => context.Employees.Include("Tasks").Include("Department.Employees.Tasks")))
+            .IsEquivalentTo(["Employee.Tasks", "Employee.Department.Employees.Tasks"]);
+
+    [Test]
+    public async Task SingleQueryCollectionsNamesProjectedCollections() =>
+        await Assert.That(
+                Collections(
+                    context => context.Departments.Select(
+                        _ => new
+                        {
+                            _.Name,
+                            Employees = _.Employees.ToList(),
+                            Siblings = _.Company.Departments
+                                .Select(department => new
+                                {
+                                    department.Name,
+                                    Employees = department.Employees.ToList()
+                                })
+                                .ToList()
+                        })))
+            .IsEquivalentTo(["Department.Employees", "Department.Employees"]);
+
+    [Test]
+    public async Task SingleQueryCollectionsNamesAProjectedAndIncludedCollectionOnce() =>
+        await Assert.That(
+                Collections(
+                    context => context.Employees
+                        .Include(_ => _.Tasks)
+                        .Select(
+                            _ => new
+                            {
+                                Employee = _,
+                                Tasks = _.Tasks.ToList()
+                            })))
+            .IsEquivalentTo(["Employee.Tasks", "Employee.Tasks"]);
+
+    static IReadOnlyList<string> Collections(Func<TestDbContext, IQueryable> query)
+    {
+        var (context, _) = ContextBuilder.Build(throwAt: SingleQueryCollections(Limits.None, 0));
+        var exception = Assert.Throws<QueryComplexityException>(() => query(context).ToQueryString());
+        return exception.Violations.Single().Collections!;
+    }
 
     static string Describe(Company company) =>
         company.Name;
