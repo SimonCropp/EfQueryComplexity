@@ -1,0 +1,23 @@
+﻿{
+  Type: QueryComplexityException,
+  Violations: [
+    {
+      Limit: MaxSingleQueryCollections,
+      Max: 1,
+      Actual: 2,
+      Collections: [
+        Employee.Tasks,
+        Employee.Department.Employees
+      ]
+    }
+  ],
+  Message:
+Query complexity limits exceeded:
+ * MaxSingleQueryCollections: 2 exceeds 1. The query loads Employee.Tasks, Employee.Department.Employees side by side. Load one of them in a query of its own, or use AsSplitQuery()
+Change a level for this query with WithQueryComplexity(), skip every check with IgnoreQueryComplexity(), or change the levels passed to UseQueryComplexity().
+Query:
+DbSet<Employee>()
+    .Include(_ => _.Tasks)
+    .Include(_ => _.Department)
+    .ThenInclude(_ => _.Employees)
+}

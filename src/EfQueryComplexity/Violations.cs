@@ -12,7 +12,16 @@ static class Violations
         Add(violations, nameof(QueryComplexityLimits.MaxNavigationDepth), limits.MaxNavigationDepth, shape.NavigationDepth);
         Add(violations, nameof(QueryComplexityLimits.MaxIncludes), limits.MaxIncludes, shape.Includes);
         Add(violations, nameof(QueryComplexityLimits.MaxIncludeDepth), limits.MaxIncludeDepth, shape.IncludeDepth);
-        Add(violations, nameof(QueryComplexityLimits.MaxSingleQueryCollections), limits.MaxSingleQueryCollections, shape.SingleQueryCollections);
+
+        var collections = shape.SingleQueryCollections;
+        if (collections.Count > limits.MaxSingleQueryCollections)
+        {
+            violations.Add(
+                new(nameof(QueryComplexityLimits.MaxSingleQueryCollections), limits.MaxSingleQueryCollections, collections.Count)
+                {
+                    Collections = collections
+                });
+        }
 
         // A key looked up in a list returns a row for each value in it, so only bounds the query when
         // MaxInValues limits the list
@@ -122,6 +131,12 @@ static class Violations
         {
             var names = string.Join(", ", violation.RowTypes!.Select(_ => _.Name));
             return $"RejectUnbounded: the query returns {names} rows without a Take";
+        }
+
+        if (violation.Collections != null)
+        {
+            var names = string.Join(", ", violation.Collections);
+            return $"{violation.Limit}: {violation.Actual} exceeds {violation.Max}. The query loads {names} side by side. Load one of them in a query of its own, or use AsSplitQuery()";
         }
 
         return $"{violation.Limit}: {violation.Actual} exceeds {violation.Max}";

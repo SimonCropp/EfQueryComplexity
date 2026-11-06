@@ -13,4 +13,11 @@ public sealed record QueryComplexityViolation(string Limit, int? Max, int? Actua
     /// every other level.
     /// </summary>
     public IReadOnlyList<Type>? RowTypes { get; init; }
+
+    /// <summary>
+    /// For MaxSingleQueryCollections, the collections the query loads side by side, in query order,
+    /// each named as the entity it is from and the navigations to it, for example
+    /// <c>Department.Employees</c>. Null for every other level.
+    /// </summary>
+    public IReadOnlyList<string>? Collections { get; init; }
 }
